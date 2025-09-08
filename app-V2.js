@@ -152,7 +152,7 @@ function debounce(func, timeout = 750){
 const API_URL = 'https://precam-planning-api-app.onrender.com/api/orders';
 
 async function replaceAllOrdersOnBackend(allOrders) {
-    const response = await fetch(`${API_URL}/replace`, {
+    const response = await fetch(`${API_URL.replace('/orders', '/replace')}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(allOrders),
@@ -251,7 +251,7 @@ function renderMachineModalList() {
          const li = document.createElement('li');
          li.className = 'flex justify-between items-center p-2 bg-gray-100 rounded';
          li.innerHTML = `<span>${machine.name} ${machine.hasRobot ? '🤖' : ''}</span><button class="delete-machine-btn text-red-500 hover:text-red-700 font-bold px-2" data-machine-name="${machine.name}" aria-label="Verwijder machine ${machine.name}">&times;</button>`;
-         machineListUl.appendChild(li);
+         customerListUl.appendChild(li);
      });
 }
 
@@ -1569,7 +1569,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     showLoadingOverlay();
     try {
-        const response = await fetch('http://localhost:3000/api/orders');
+        const response = await fetch(API_URL);
         if (!response.ok) {
             throw new Error(`Kon data niet laden: ${response.statusText}`);
         }
