@@ -149,7 +149,7 @@ function debounce(func, timeout = 750){
 }
 
 // --- API FUNCTIES ---
-const API_URL = 'https://precam-planning-api-jan.onrender.com/api/orders';
+const API_URL = 'https://precam-planning-api-app.onrender.com/api/orders';
 
 async function replaceAllOrdersOnBackend(allOrders) {
     const response = await fetch(`${API_URL}/replace`, {
