@@ -1,22 +1,34 @@
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const path = require('path'); // TOEGEVOEGD
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000; // TOEGEVOEGD
 
 // --- CONFIGURATIE ---
-const DATA_FILE_PATH = './data/orders.json';
+// GEWIJZIGD: Gebruik path.join voor een betrouwbaar bestandspad
+const DATA_FILE_PATH = path.join(__dirname, 'data', 'orders.json');
 
 // --- MIDDLEWARE ---
+// GEWIJZIGD: Configureer CORS voor zowel lokaal als productie
+const allowedOrigins = [
+  'http://127.0.0.1:5500', // Voor VS Code Live Server
+  'https://precam-planning-app.netlify.app' // Voor je live website
+];
 
-// OUDE CODE: app.use(cors()); 
-// NIEUW: Configureer CORS om alleen je Netlify frontend toe te staan
 const corsOptions = {
-  origin: 'https://precam-planning-app.netlify.app'
+  origin: function (origin, callback) {
+    // Sta verzoeken toe als ze in de lijst staan (of als ze geen origin hebben, bv. Postman)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Niet toegestaan door CORS'));
+    }
+  }
 };
-app.use(cors(corsOptions));
 
+app.use(cors(corsOptions));
 app.use(express.json()); 
 
 // --- DATABASE ---
@@ -94,5 +106,6 @@ app.post('/api/orders/replace', (req, res) => {
 
 // --- SERVER STARTEN ---
 app.listen(PORT, () => {
-  console.log(`Server draait op http://localhost:${PORT}`);
+  // GEWIJZIGD: Gebruik de PORT variabele voor een duidelijke log
+  console.log(`Server draait op poort ${PORT}`);
 });
