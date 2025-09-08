@@ -1,19 +1,25 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs'); // NIEUW: 'File System' module om bestanden te lezen/schrijven
+const fs = require('fs');
 
 const app = express();
 const PORT = 3000;
 
 // --- CONFIGURATIE ---
-const DATA_FILE_PATH = './data/orders.json'; // NIEUW: Pad naar ons databestand
+const DATA_FILE_PATH = './data/orders.json';
 
 // --- MIDDLEWARE ---
-app.use(cors()); 
+
+// OUDE CODE: app.use(cors()); 
+// NIEUW: Configureer CORS om alleen je Netlify frontend toe te staan
+const corsOptions = {
+  origin: 'https://precam-planning-app.netlify.app'
+};
+app.use(cors(corsOptions));
+
 app.use(express.json()); 
 
 // --- DATABASE ---
-// GEWIJZIGD: We lezen de data nu uit het JSON-bestand bij de start
 let orders = [];
 try {
     const data = fs.readFileSync(DATA_FILE_PATH, 'utf8');
@@ -23,7 +29,6 @@ try {
     console.error("Kon data niet laden uit orders.json. Start met een lege lijst.", error);
 }
 
-// NIEUW: Functie om de data op te slaan naar het bestand
 function saveDataToFile() {
     fs.writeFile(DATA_FILE_PATH, JSON.stringify(orders, null, 2), (err) => {
         if (err) {
@@ -35,21 +40,20 @@ function saveDataToFile() {
 }
 
 // --- API ROUTES ---
-
 app.get('/', (req, res) => {
   res.json({ message: "Hallo, de Precam-backend werkt!" });
 });
 
 app.get('/api/orders', (req, res) => {
   console.log("GET /api/orders: Alle orders worden opgevraagd.");
-  res.json(orders); // GEWIJZIGD: Gebruikt nu 'orders'
+  res.json(orders);
 });
 
 app.post('/api/orders', (req, res) => {
     const newOrder = req.body;
     console.log("POST /api/orders: Nieuwe order ontvangen:", newOrder.id);
-    orders.push(newOrder); // GEWIJZIGD
-    saveDataToFile(); // NIEUW: Sla wijziging op
+    orders.push(newOrder);
+    saveDataToFile();
     res.status(201).json(newOrder);
 });
 
@@ -57,22 +61,22 @@ app.put('/api/orders/:id', (req, res) => {
     const orderId = req.params.id;
     const updatedOrderData = req.body;
     console.log(`PUT /api/orders/${orderId}: Order wordt bijgewerkt.`);
-    const orderIndex = orders.findIndex(order => order.id === orderId); // GEWIJZIGD
+    const orderIndex = orders.findIndex(order => order.id === orderId);
     if (orderIndex === -1) {
         return res.status(404).json({ message: "Order niet gevonden" });
     }
-    orders[orderIndex] = updatedOrderData; // GEWIJZIGD
-    saveDataToFile(); // NIEUW: Sla wijziging op
+    orders[orderIndex] = updatedOrderData;
+    saveDataToFile();
     res.json(updatedOrderData);
 });
 
 app.delete('/api/orders/:id', (req, res) => {
     const orderId = req.params.id;
     console.log(`DELETE /api/orders/${orderId}: Order wordt verwijderd.`);
-    const initialLength = orders.length; // GEWIJZIGD
-    orders = orders.filter(order => order.id !== orderId); // GEWIJZIGD
+    const initialLength = orders.length;
+    orders = orders.filter(order => order.id !== orderId);
     if (orders.length !== initialLength) {
-        saveDataToFile(); // NIEUW: Sla wijziging op
+        saveDataToFile();
     }
     res.status(204).send();
 });
@@ -83,8 +87,8 @@ app.post('/api/orders/replace', (req, res) => {
     if (!Array.isArray(nieuweOrders)) {
         return res.status(400).send({ message: 'Ongeldige data: array van orders wordt verwacht.' });
     }
-    orders = nieuweOrders; // GEWIJZIGD
-    saveDataToFile(); // NIEUW: Sla wijziging op
+    orders = nieuweOrders;
+    saveDataToFile();
     res.status(200).send({ message: 'Alle orders zijn succesvol vervangen.' });
 });
 
