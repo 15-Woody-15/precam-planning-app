@@ -151,18 +151,15 @@ function debounce(func, timeout = 750){
 // --- API FUNCTIES ---
 const API_URL = 'https://precam-planning-api-app.onrender.com/api/orders';
 
-// NIEUW
 async function replaceAllOrdersOnBackend(allOrders) {
-    // We voegen simpelweg '/replace' toe aan de basis API_URL
-    const replaceUrl = API_URL.replace('/orders', '/orders/replace');
-    const response = await fetch(replaceUrl, {
+    const response = await fetch(`${API_URL.replace('/orders', '/replace')}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(allOrders),
     });
     if (!response.ok) throw new Error(`Serverfout bij het vervangen van alle orders: ${response.statusText}`);
     return;
-}}
+}
 
 async function addOrderOnBackend(order) {
     const response = await fetch(API_URL, {
