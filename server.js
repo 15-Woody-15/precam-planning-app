@@ -1,25 +1,27 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path'); // TOEGEVOEGD
+const path = require('path');
+const { Pool } = require('pg'); // NIEUW: PostgreSQL client
 
 const app = express();
-const PORT = process.env.PORT || 3000; // TOEGEVOEGD
+const PORT = process.env.PORT || 3000;
 
-// --- CONFIGURATIE ---
-// GEWIJZIGD: Gebruik path.join voor een betrouwbaar bestandspad
-const DATA_FILE_PATH = path.join(__dirname, 'data', 'orders.json');
+// --- DATABASE CONNECTIE ---
+// Maakt verbinding met de database via de URL die we in Render hebben ingesteld
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // Nodig voor gratis Render databases
+  }
+});
 
 // --- MIDDLEWARE ---
-// GEWIJZIGD: Configureer CORS voor zowel lokaal als productie
 const allowedOrigins = [
-  'http://127.0.0.1:5500', // Voor VS Code Live Server
-  'https://precam-planning-app.netlify.app' // Voor je live website
+  'http://127.0.0.1:5500',
+  'https://precam-planning-app.netlify.app'
 ];
-
 const corsOptions = {
   origin: function (origin, callback) {
-    // Sta verzoeken toe als ze in de lijst staan (of als ze geen origin hebben, bv. Postman)
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -27,85 +29,110 @@ const corsOptions = {
     }
   }
 };
-
 app.use(cors(corsOptions));
 app.use(express.json()); 
 
-// --- DATABASE ---
-let orders = [];
-try {
-    const data = fs.readFileSync(DATA_FILE_PATH, 'utf8');
-    orders = JSON.parse(data);
-    console.log("Data succesvol geladen uit orders.json");
-} catch (error) {
-    console.error("Kon data niet laden uit orders.json. Start met een lege lijst.", error);
+// --- DATABASE INITIALISATIE ---
+// Deze functie maakt de 'orders' tabel aan als deze nog niet bestaat.
+// We gebruiken een JSONB veld om de complexe orderdata (met parts etc.) makkelijk op te slaan.
+async function initializeDatabase() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id VARCHAR(255) PRIMARY KEY,
+        order_data JSONB NOT NULL
+      );
+    `);
+    console.log("Database tabel 'orders' is gecontroleerd/aangemaakt.");
+  } catch (err) {
+    console.error("Fout bij initialiseren van database:", err);
+  } finally {
+    client.release();
+  }
 }
 
-function saveDataToFile() {
-    fs.writeFile(DATA_FILE_PATH, JSON.stringify(orders, null, 2), (err) => {
-        if (err) {
-            console.error('Fout bij het opslaan van de data:', err);
-        } else {
-            console.log('Data succesvol opgeslagen in orders.json');
-        }
-    });
-}
-
-// --- API ROUTES ---
+// --- API ROUTES (NU MET DATABASE QUERIES) ---
 app.get('/', (req, res) => {
-  res.json({ message: "Hallo, de Precam-backend werkt!" });
+  res.json({ message: "Hallo, de Precam-backend (met database) werkt!" });
 });
 
-app.get('/api/orders', (req, res) => {
-  console.log("GET /api/orders: Alle orders worden opgevraagd.");
-  res.json(orders);
+// Haal alle orders op
+app.get('/api/orders', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT order_data FROM orders');
+    // We sturen alleen de inhoud van de JSONB kolom terug
+    const allOrders = result.rows.map(row => row.order_data);
+    res.json(allOrders);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Interne serverfout" });
+  }
 });
 
-app.post('/api/orders', (req, res) => {
+// Voeg een nieuwe order toe
+app.post('/api/orders', async (req, res) => {
     const newOrder = req.body;
-    console.log("POST /api/orders: Nieuwe order ontvangen:", newOrder.id);
-    orders.push(newOrder);
-    saveDataToFile();
-    res.status(201).json(newOrder);
+    try {
+        await pool.query('INSERT INTO orders (id, order_data) VALUES ($1, $2)', [newOrder.id, newOrder]);
+        res.status(201).json(newOrder);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Kon order niet toevoegen" });
+    }
 });
 
-app.put('/api/orders/:id', (req, res) => {
+// Update een bestaande order
+app.put('/api/orders/:id', async (req, res) => {
     const orderId = req.params.id;
     const updatedOrderData = req.body;
-    console.log(`PUT /api/orders/${orderId}: Order wordt bijgewerkt.`);
-    const orderIndex = orders.findIndex(order => order.id === orderId);
-    if (orderIndex === -1) {
-        return res.status(404).json({ message: "Order niet gevonden" });
+    try {
+        const result = await pool.query('UPDATE orders SET order_data = $1 WHERE id = $2 RETURNING *', [updatedOrderData, orderId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Order niet gevonden" });
+        }
+        res.json(updatedOrderData);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Kon order niet bijwerken" });
     }
-    orders[orderIndex] = updatedOrderData;
-    saveDataToFile();
-    res.json(updatedOrderData);
 });
 
-app.delete('/api/orders/:id', (req, res) => {
+// Verwijder een order
+app.delete('/api/orders/:id', async (req, res) => {
     const orderId = req.params.id;
-    console.log(`DELETE /api/orders/${orderId}: Order wordt verwijderd.`);
-    const initialLength = orders.length;
-    orders = orders.filter(order => order.id !== orderId);
-    if (orders.length !== initialLength) {
-        saveDataToFile();
+    try {
+        await pool.query('DELETE FROM orders WHERE id = $1', [orderId]);
+        res.status(204).send();
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Kon order niet verwijderen" });
     }
-    res.status(204).send();
 });
 
-app.post('/api/orders/replace', (req, res) => {
-    console.log("POST /api/orders/replace: Alle orders worden vervangen door import.");
+// Vervang alle orders (voor import)
+app.post('/api/orders/replace', async (req, res) => {
     const nieuweOrders = req.body;
-    if (!Array.isArray(nieuweOrders)) {
-        return res.status(400).send({ message: 'Ongeldige data: array van orders wordt verwacht.' });
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN'); // Start transactie
+        await client.query('DELETE FROM orders'); // Verwijder alle oude orders
+        for (const order of nieuweOrders) {
+            await client.query('INSERT INTO orders (id, order_data) VALUES ($1, $2)', [order.id, order]);
+        }
+        await client.query('COMMIT'); // Bevestig transactie
+        res.status(200).send({ message: 'Alle orders zijn succesvol vervangen.' });
+    } catch (err) {
+        await client.query('ROLLBACK'); // Maak ongedaan bij fout
+        console.error(err);
+        res.status(500).json({ error: "Kon orders niet importeren" });
+    } finally {
+        client.release();
     }
-    orders = nieuweOrders;
-    saveDataToFile();
-    res.status(200).send({ message: 'Alle orders zijn succesvol vervangen.' });
 });
 
 // --- SERVER STARTEN ---
 app.listen(PORT, () => {
-  // GEWIJZIGD: Gebruik de PORT variabele voor een duidelijke log
   console.log(`Server draait op poort ${PORT}`);
+  initializeDatabase(); // Roep de initialisatie aan bij het opstarten
 });
