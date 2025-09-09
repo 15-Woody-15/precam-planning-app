@@ -35,26 +35,9 @@ app.use(express.json());
 async function initializeDatabase() {
   const client = await pool.connect();
   try {
-    // Orders tabel
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS orders (
-        id VARCHAR(255) PRIMARY KEY,
-        order_data JSONB NOT NULL
-      );
-    `);
-    // Klanten tabel
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS klanten (
-        naam VARCHAR(255) PRIMARY KEY
-      );
-    `);
-    // Machines tabel
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS machines (
-        naam VARCHAR(255) PRIMARY KEY,
-        heeft_robot BOOLEAN NOT NULL
-      );
-    `);
+    await client.query(`CREATE TABLE IF NOT EXISTS orders (id VARCHAR(255) PRIMARY KEY, order_data JSONB NOT NULL);`);
+    await client.query(`CREATE TABLE IF NOT EXISTS klanten (naam VARCHAR(255) PRIMARY KEY);`);
+    await client.query(`CREATE TABLE IF NOT EXISTS machines (naam VARCHAR(255) PRIMARY KEY, heeft_robot BOOLEAN NOT NULL);`);
     console.log("Database tabellen zijn gecontroleerd/aangemaakt.");
   } catch (err) {
     console.error("Fout bij initialiseren van database:", err);
@@ -72,14 +55,12 @@ app.get('/', (req, res) => {
 app.get('/api/orders', async (req, res) => {
   try {
     const result = await pool.query('SELECT order_data FROM orders');
-    const allOrders = result.rows.map(row => row.order_data);
-    res.json(allOrders);
+    res.json(result.rows.map(row => row.order_data));
   } catch (err) {
     console.error("Fout bij ophalen orders:", err);
     res.status(500).json({ error: "Interne serverfout bij ophalen orders" });
   }
 });
-
 app.post('/api/orders', async (req, res) => {
     const newOrder = req.body;
     try {
@@ -90,22 +71,18 @@ app.post('/api/orders', async (req, res) => {
         res.status(500).json({ error: "Kon order niet toevoegen" });
     }
 });
-
 app.put('/api/orders/:id', async (req, res) => {
     const orderId = req.params.id;
     const updatedOrderData = req.body;
     try {
-        const result = await pool.query('UPDATE orders SET order_data = $1 WHERE id = $2 RETURNING *', [JSON.stringify(updatedOrderData), orderId]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: "Order niet gevonden" });
-        }
+        const result = await pool.query('UPDATE orders SET order_data = $1 WHERE id = $2', [JSON.stringify(updatedOrderData), orderId]);
+        if (result.rowCount === 0) return res.status(404).json({ message: "Order niet gevonden" });
         res.json(updatedOrderData);
     } catch (err) {
         console.error("Fout bij bijwerken order:", err);
         res.status(500).json({ error: "Kon order niet bijwerken" });
     }
 });
-
 app.delete('/api/orders/:id', async (req, res) => {
     const orderId = req.params.id;
     try {
@@ -116,7 +93,6 @@ app.delete('/api/orders/:id', async (req, res) => {
         res.status(500).json({ error: "Kon order niet verwijderen" });
     }
 });
-
 app.post('/api/orders/replace', async (req, res) => {
     const nieuweOrders = req.body;
     const client = await pool.connect();
@@ -147,20 +123,18 @@ app.get('/api/klanten', async (req, res) => {
     res.status(500).json({ error: "Fout bij ophalen klanten" });
   }
 });
-
 app.post('/api/klanten', async (req, res) => {
     const { naam } = req.body;
     try {
-        await pool.query('INSERT INTO klanten (naam) VALUES ($1)', [naam]);
+        await pool.query('INSERT INTO klanten (naam) VALUES ($1) ON CONFLICT (naam) DO NOTHING', [naam]);
         res.status(201).json({ naam });
     } catch (err) {
         console.error("Fout bij toevoegen klant:", err);
         res.status(500).json({ error: "Kon klant niet toevoegen" });
     }
 });
-
 app.delete('/api/klanten/:naam', async (req, res) => {
-    const naam = req.params.naam;
+    const naam = decodeURIComponent(req.params.naam);
     try {
         await pool.query('DELETE FROM klanten WHERE naam = $1', [naam]);
         res.status(204).send();
@@ -174,27 +148,24 @@ app.delete('/api/klanten/:naam', async (req, res) => {
 app.get('/api/machines', async (req, res) => {
   try {
     const result = await pool.query('SELECT naam, heeft_robot FROM machines ORDER BY naam');
-    const machines = result.rows.map(row => ({ name: row.naam, hasRobot: row.heeft_robot }));
-    res.json(machines);
+    res.json(result.rows.map(row => ({ name: row.naam, hasRobot: row.heeft_robot })));
   } catch (err) {
     console.error("Fout bij ophalen machines:", err);
     res.status(500).json({ error: "Fout bij ophalen machines" });
   }
 });
-
 app.post('/api/machines', async (req, res) => {
     const { name, hasRobot } = req.body;
     try {
-        await pool.query('INSERT INTO machines (naam, heeft_robot) VALUES ($1, $2)', [name, hasRobot]);
+        await pool.query('INSERT INTO machines (naam, heeft_robot) VALUES ($1, $2) ON CONFLICT (naam) DO NOTHING', [name, hasRobot]);
         res.status(201).json({ name, hasRobot });
     } catch (err) {
         console.error("Fout bij toevoegen machine:", err);
         res.status(500).json({ error: "Kon machine niet toevoegen" });
     }
 });
-
 app.delete('/api/machines/:naam', async (req, res) => {
-    const naam = req.params.naam;
+    const naam = decodeURIComponent(req.params.naam);
     try {
         await pool.query('DELETE FROM machines WHERE naam = $1', [naam]);
         res.status(204).send();
