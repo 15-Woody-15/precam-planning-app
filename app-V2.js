@@ -29,7 +29,7 @@ function saveState() {
 }
 
 // --- DOM ELEMENTEN ---
-let addOrderForm, orderListBody, orderListThead, planningContainer, importDataLink, clearDataLink, prevWeekBtn, nextWeekBtn, searchInput, searchKeySelect, partsContainer, addPartBtn, manageCustomersBtn, customerModal, closeCustomerModalBtn, addCustomerForm, customerListUl, newCustomerNameInput, klantSelect, newOrderHeader, newOrderBody, toggleOrderFormIcon, manageMachinesBtn, machineModal, closeMachineModalBtn, addMachineForm, machineListUl, newMachineNameInput, newMachineHasRobotCheckbox, fullscreenBtn, fullscreenText, fullscreenIconEnter, fullscreenIconExit, actionsDropdownBtn, actionsDropdownMenu, exportDataLink, importFileInput, todayBtn, editOrderModal, editOrderForm, editPartsContainer, cancelEditBtn, saveOrderBtn, editKlantSelect, machineLoadModal, showLoadBtn, prevLoadWeekBtn, nextLoadWeekBtn, loadWeekTitle, loadWeekContent, closeLoadModalBtn, confirmDeleteModal, confirmDeleteBtn, cancelDeleteBtn, deleteConfirmText, deleteConfirmTitle, loadingOverlay, themeToggleBtn, themeToggleDarkIcon, themeToggleLightIcon;
+let addOrderForm, orderListBody, orderListThead, planningContainer, importDataLink, clearDataLink, prevWeekBtn, nextWeekBtn, searchInput, searchKeySelect, partsContainer, addPartBtn, manageCustomersBtn, customerModal, closeCustomerModalBtn, addCustomerForm, customerListUl, newCustomerNameInput, klantSelect, newOrderHeader, newOrderBody, toggleOrderFormIcon, manageMachinesBtn, machineModal, closeMachineModalBtn, addMachineForm, machineListUl, newMachineNameInput, newMachineHasRobotCheckbox, fullscreenBtn, fullscreenText, fullscreenIconEnter, fullscreenIconExit, actionsDropdownBtn, actionsDropdownMenu, exportDataLink, importFileInput, todayBtn, editOrderModal, editOrderForm, editPartsContainer, cancelEditBtn, saveOrderBtn, editKlantSelect, machineLoadModal, showLoadBtn, prevLoadWeekBtn, nextLoadWeekBtn, loadWeekTitle, loadWeekContent, closeLoadModalBtn, confirmDeleteModal, confirmDeleteBtn, cancelDeleteBtn, deleteConfirmText, deleteConfirmTitle, loadingOverlay, themeToggleBtn, themeToggleDarkIcon, themeToggleLightIcon, addPartToEditBtn;
 
 function initializeDOMElements() {
     addOrderForm = document.getElementById('add-order-form');
@@ -92,6 +92,7 @@ function initializeDOMElements() {
     themeToggleBtn = document.getElementById('theme-toggle-btn');
     themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
     themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+    addPartToEditBtn = document.getElementById('add-part-to-edit-btn');
 }
 
 // --- HULPFUNCTIES ---
@@ -144,6 +145,7 @@ function debounce(func, timeout = 750){
 
 // --- API FUNCTIES ---
 // Belangrijk: pas deze URL aan naar 'http://localhost:3000/api' als je lokaal test.
+// Belangrijk: pas deze URL aan naar 'https://precam-planning-api-app.onrender.com/api' als je live test.
 const API_URL = 'https://precam-planning-api-app.onrender.com/api';
 
 async function replaceAllBackendData(data) {
@@ -1346,13 +1348,30 @@ function setupEventListeners() {
         }
     });
 
+    addPartToEditBtn.addEventListener('click', () => {
+        const orderId = editOrderForm.dataset.editingOrderId;
+        if (!orderId) return;
+
+        const partDiv = document.createElement('div');
+        // We markeren dit als een 'nieuw' onderdeel
+        partDiv.className = 'edit-part-entry is-new grid grid-cols-1 md:grid-cols-4 gap-4 items-center border-l-4 border-green-400 p-2 rounded-md';
+        partDiv.innerHTML = `
+            <div><label class="block text-xs font-medium text-gray-500">Naam</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="onderdeelNaam" placeholder="Nieuw onderdeel" required></div>
+            <div><label class="block text-xs font-medium text-gray-500">Tekening Nr.</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="tekeningNummer"></div>
+            <div><label class="block text-xs font-medium text-gray-500">Aantal</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="aantal" value="1" required></div>
+            <div><label class="block text-xs font-medium text-gray-500">Prod. (min/st)</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="productieTijdPerStuk" value="1" required></div>
+        `;
+        editPartsContainer.appendChild(partDiv);
+        partDiv.querySelector('input').focus();
+    });
+
     cancelEditBtn.addEventListener('click', () => {
         editOrderModal.classList.add('hidden');
     });
 
     editOrderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const originalOrderId = e.target.dataset.editingOrderId;
         const orderToUpdate = state.orders.find(o => o.id === originalOrderId);
 
@@ -1361,6 +1380,7 @@ function setupEventListeners() {
             return;
         }
 
+        // Maak een diepe kopie om mee te werken
         const updatedOrderData = JSON.parse(JSON.stringify(orderToUpdate));
 
         const newOrderId = document.getElementById('edit-order-id').value;
@@ -1368,28 +1388,65 @@ function setupEventListeners() {
         updatedOrderData.klant = document.getElementById('edit-klant').value;
         updatedOrderData.klantOrdernr = document.getElementById('edit-klant-ordernummer').value;
         updatedOrderData.deadline = document.getElementById('edit-deadline').value;
-        
+
+        // --- START VAN AANGEPASTE LOGICA ---
+
+        // Vind het hoogste onderdeelnummer om conflicten te vermijden
+        let maxPartNumber = 0;
+        updatedOrderData.parts.forEach(p => {
+            const num = parseInt(p.id.split('-').pop());
+            if (num > maxPartNumber) maxPartNumber = num;
+        });
+
         const partForms = editPartsContainer.querySelectorAll('.edit-part-entry');
         partForms.forEach(partForm => {
             const originalPartId = partForm.dataset.partId;
-            const partToUpdate = updatedOrderData.parts.find(p => p.id === originalPartId);
 
-            if (partToUpdate) {
+            // Als het een bestaand onderdeel is, update het.
+            if (originalPartId) {
+                const partToUpdate = updatedOrderData.parts.find(p => p.id === originalPartId);
+                if (partToUpdate) {
+                    const newAantal = parseInt(partForm.querySelector('[data-field="aantal"]').value);
+                    const newProdTijd = parseFloat(partForm.querySelector('[data-field="productieTijdPerStuk"]').value);
+
+                    partToUpdate.onderdeelNaam = partForm.querySelector('[data-field="onderdeelNaam"]').value;
+                    partToUpdate.tekeningNummer = partForm.querySelector('[data-field="tekeningNummer"]').value;
+                    partToUpdate.aantal = newAantal;
+                    partToUpdate.productieTijdPerStuk = newProdTijd;
+                    partToUpdate.totaalUren = (newAantal * newProdTijd) / 60;
+
+                    // Update part ID als order ID is veranderd
+                    if (originalOrderId !== newOrderId) {
+                        const partIndex = originalPartId.split('-').pop();
+                        partToUpdate.id = `${newOrderId}-${partIndex}`;
+                    }
+                }
+            } 
+            // Als het een NIEUW onderdeel is, maak het aan en voeg toe.
+            else if (partForm.classList.contains('is-new')) {
+                maxPartNumber++; // Verhoog voor uniek ID
+                const newPartId = `${newOrderId}-${maxPartNumber}`;
                 const newAantal = parseInt(partForm.querySelector('[data-field="aantal"]').value);
                 const newProdTijd = parseFloat(partForm.querySelector('[data-field="productieTijdPerStuk"]').value);
-                
-                partToUpdate.onderdeelNaam = partForm.querySelector('[data-field="onderdeelNaam"]').value;
-                partToUpdate.tekeningNummer = partForm.querySelector('[data-field="tekeningNummer"]').value;
-                partToUpdate.aantal = newAantal;
-                partToUpdate.productieTijdPerStuk = newProdTijd;
-                partToUpdate.totaalUren = (newAantal * newProdTijd) / 60;
 
-                if (originalOrderId !== newOrderId) {
-                    const partIndex = originalPartId.split('-').pop();
-                    partToUpdate.id = `${newOrderId}-${partIndex}`;
-                }
+                const newPart = {
+                    id: newPartId,
+                    onderdeelNaam: partForm.querySelector('[data-field="onderdeelNaam"]').value,
+                    tekeningNummer: partForm.querySelector('[data-field="tekeningNummer"]').value,
+                    aantal: newAantal,
+                    productieTijdPerStuk: newProdTijd,
+                    totaalUren: (newAantal * newProdTijd) / 60,
+                    materiaalStatus: 'Niet Beschikbaar',
+                    status: 'Nog in te plannen',
+                    machine: null,
+                    startDate: null,
+                    shift: 8,
+                };
+                updatedOrderData.parts.push(newPart);
             }
         });
+
+        // --- EINDE AANGEPASTE LOGICA ---
 
         showLoadingOverlay();
         try {
