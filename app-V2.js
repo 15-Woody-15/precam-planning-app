@@ -12,7 +12,7 @@ const STORAGE_KEY = 'planning_orders_v34';
 // --- DATA OPSLAG & STATE ---
 const storedState = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
 let state = {
-    orders: [], // Start altijd met een lege orderlijst; de server is de enige bron.
+    orders: [],
     klanten: storedState.klanten || DEFAULT_KLANTEN,
     machines: storedState.machines || DEFAULT_MACHINES,
     isOrderFormCollapsed: storedState.isOrderFormCollapsed || false,
@@ -38,7 +38,7 @@ function saveState() {
 }
 
 // --- DOM ELEMENTEN ---
-let addOrderForm, orderListBody, orderListThead, planningContainer, importDataLink, clearDataLink, prevWeekBtn, nextWeekBtn, searchInput, searchKeySelect, partsContainer, addPartBtn, manageCustomersBtn, customerModal, closeCustomerModalBtn, addCustomerForm, customerListUl, newCustomerNameInput, klantSelect, newOrderHeader, newOrderBody, toggleOrderFormIcon, manageMachinesBtn, machineModal, closeMachineModalBtn, addMachineForm, machineListUl, newMachineNameInput, newMachineHasRobotCheckbox, fullscreenBtn, fullscreenText, fullscreenIconEnter, fullscreenIconExit, actionsDropdownBtn, actionsDropdownMenu, exportDataLink, importFileInput, todayBtn, editOrderModal, editOrderForm, editPartsContainer, cancelEditBtn, saveOrderBtn, editKlantSelect, machineLoadModal, showLoadBtn, prevLoadWeekBtn, nextLoadWeekBtn, loadWeekTitle, loadWeekContent, closeLoadModalBtn, confirmDeleteModal, confirmDeleteBtn, cancelDeleteBtn, deleteConfirmText, deleteConfirmTitle, loadingOverlay;
+let addOrderForm, orderListBody, orderListThead, planningContainer, importDataLink, clearDataLink, prevWeekBtn, nextWeekBtn, searchInput, searchKeySelect, partsContainer, addPartBtn, manageCustomersBtn, customerModal, closeCustomerModalBtn, addCustomerForm, customerListUl, newCustomerNameInput, klantSelect, newOrderHeader, newOrderBody, toggleOrderFormIcon, manageMachinesBtn, machineModal, closeMachineModalBtn, addMachineForm, machineListUl, newMachineNameInput, newMachineHasRobotCheckbox, fullscreenBtn, fullscreenText, fullscreenIconEnter, fullscreenIconExit, actionsDropdownBtn, actionsDropdownMenu, exportDataLink, importFileInput, todayBtn, editOrderModal, editOrderForm, editPartsContainer, cancelEditBtn, saveOrderBtn, editKlantSelect, machineLoadModal, showLoadBtn, prevLoadWeekBtn, nextLoadWeekBtn, loadWeekTitle, loadWeekContent, closeLoadModalBtn, confirmDeleteModal, confirmDeleteBtn, cancelDeleteBtn, deleteConfirmText, deleteConfirmTitle, loadingOverlay, themeToggleBtn, themeToggleDarkIcon, themeToggleLightIcon;
 
 function initializeDOMElements() {
     addOrderForm = document.getElementById('add-order-form');
@@ -98,15 +98,18 @@ function initializeDOMElements() {
     deleteConfirmText = document.getElementById('delete-confirm-text');
     deleteConfirmTitle = document.getElementById('delete-confirm-title');
     loadingOverlay = document.getElementById('loading-overlay');
+    themeToggleBtn = document.getElementById('theme-toggle-btn');
+    themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+    themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
 }
 
 // --- HULPFUNCTIES ---
 function showLoadingOverlay() {
-    loadingOverlay.classList.remove('hidden');
+    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
 }
 
 function hideLoadingOverlay() {
-    loadingOverlay.classList.add('hidden');
+    if (loadingOverlay) loadingOverlay.classList.add('hidden');
 }
 
 const formatDateToYMD = (date) => {
@@ -152,7 +155,8 @@ function debounce(func, timeout = 750){
 const API_URL = 'https://precam-planning-api-app.onrender.com/api/orders';
 
 async function replaceAllOrdersOnBackend(allOrders) {
-    const response = await fetch(`${API_URL.replace('/orders', '/replace')}`, {
+    const replaceUrl = API_URL.replace('/orders', '/orders/replace');
+    const response = await fetch(replaceUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(allOrders),
@@ -251,7 +255,7 @@ function renderMachineModalList() {
          const li = document.createElement('li');
          li.className = 'flex justify-between items-center p-2 bg-gray-100 rounded';
          li.innerHTML = `<span>${machine.name} ${machine.hasRobot ? '🤖' : ''}</span><button class="delete-machine-btn text-red-500 hover:text-red-700 font-bold px-2" data-machine-name="${machine.name}" aria-label="Verwijder machine ${machine.name}">&times;</button>`;
-         customerListUl.appendChild(li);
+         machineListUl.appendChild(li);
      });
 }
 
