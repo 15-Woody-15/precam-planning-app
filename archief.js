@@ -1,7 +1,7 @@
 // --- CONFIGURATIE ---
 // Zorg dat deze URL overeenkomt met de URL in app-V2.js
 // const API_URL = 'https://precam-planning-api-app.onrender.com/api';
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://precam-planning-api-app.onrender.com/api';
 
 // --- STATE ---
 let state = {
