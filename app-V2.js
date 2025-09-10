@@ -344,6 +344,7 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
             <td class="px-3 py-3 text-center">${deadlineSpan}</td>
             <td class="px-3 py-3" colspan="4">${overallStatus} (${order.parts.length} onderdelen)</td>
             <td class="px-3 py-3 text-right">
+                ${overallStatus === 'Voltooid' ? `<button class="archive-order-btn text-sm text-green-600 hover:underline font-semibold mr-4" data-order-id="${order.id}">Archiveer</button>` : ''}
                 <button class="edit-order-btn text-sm text-blue-600 hover:underline font-semibold" data-order-id="${order.id}">Bewerken</button>
             </td>
         `;
@@ -894,8 +895,6 @@ function setupEventListeners() {
         if (button) {
             let partId = button.dataset.partId;
             let orderId = button.dataset.orderId || (findPart(partId) ? state.orders.find(o => o.parts.some(p => p.id === partId))?.id : null);
-            let part = partId ? findPart(partId) : null;
-            let order = orderId ? state.orders.find(o => o.id === orderId) : null;
 
             if (button.classList.contains('edit-order-btn')) {
                 e.stopPropagation();
@@ -903,10 +902,42 @@ function setupEventListeners() {
                 return;
             }
 
+            if (button.classList.contains('archive-order-btn')) {
+                e.stopPropagation();
+                
+                // --- DEZE AANROEP IS NU BIJGEWERKT ---
+                openConfirmModal(
+                    'Order Archiveren',
+                    `Weet je zeker dat je order "${orderId}" wilt archiveren?`,
+                    async () => {
+                        showLoadingOverlay();
+                        try {
+                            const orderToArchive = state.orders.find(o => o.id === orderId);
+                            if (orderToArchive) {
+                                orderToArchive.isArchived = true;
+                                await updateOrderOnBackend(orderId, orderToArchive);
+                                state.orders = state.orders.filter(o => o.id !== orderId); // Verwijder uit de actieve lijst
+                                renderAll();
+                                showNotification(`Order ${orderId} gearchiveerd.`, 'success');
+                            }
+                        } catch (error) {
+                            showNotification(`Kon order niet archiveren: ${error.message}`, 'error');
+                        } finally {
+                            hideLoadingOverlay();
+                        }
+                    },
+                    'Ja, archiveer', // De nieuwe tekst
+                    'green'           // De nieuwe kleur
+                );
+                return;
+            }
+
+            let part = partId ? findPart(partId) : null;
+            let order = orderId ? state.orders.find(o => o.id === orderId) : null;
             if (!part || !order) return;
 
             if (button.classList.contains('delete-btn')) {
-                 openConfirmModal(
+                openConfirmModal(
                     'Onderdeel Verwijderen', 
                     `Weet je zeker dat je onderdeel "${part.id}" wilt verwijderen?`,
                     async () => {
@@ -915,9 +946,8 @@ function setupEventListeners() {
                         
                         showLoadingOverlay();
                         try {
-                            const originalParts = [...orderContainingPart.parts];
-                            const originalOrders = [...state.orders];
-
+                            const originalOrders = JSON.parse(JSON.stringify(state.orders));
+                            
                             orderContainingPart.parts = orderContainingPart.parts.filter(p => p.id !== part.id);
 
                             if (orderContainingPart.parts.length === 0) {
@@ -929,9 +959,8 @@ function setupEventListeners() {
                                 showNotification(`Onderdeel verwijderd.`, 'success');
                             }
                         } catch(error) {
-                             showNotification(`Kon onderdeel niet verwijderen: ${error.message}`, 'error');
-                             // Herstel de staat bij een fout
-                             state.orders = originalOrders;
+                            showNotification(`Kon onderdeel niet verwijderen: ${error.message}`, 'error');
+                            state.orders = originalOrders;
                         } finally {
                             renderAll();
                             hideLoadingOverlay();
@@ -1662,10 +1691,30 @@ function renderMachineLoad(loadData) {
 // --- MODAL LOGICA ---
 let onConfirmCallback = null;
 
-function openConfirmModal(title, text, onConfirm) {
+function openConfirmModal(title, text, onConfirm, confirmText = 'Ja, verwijder', confirmColor = 'red') {
     deleteConfirmTitle.textContent = title;
     deleteConfirmText.textContent = text;
     onConfirmCallback = onConfirm;
+
+    // Pas de tekst van de knop aan
+    confirmDeleteBtn.textContent = confirmText;
+
+    // Verwijder alle mogelijke kleur-classes
+    confirmDeleteBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-green-600', 'hover:bg-green-700', 'bg-blue-600', 'hover:bg-blue-700');
+
+    // Voeg de juiste nieuwe kleur-classes toe
+    switch (confirmColor) {
+        case 'green':
+            confirmDeleteBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+            break;
+        case 'blue':
+            confirmDeleteBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            break;
+        default: // 'red' is de standaard
+            confirmDeleteBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+            break;
+    }
+
     confirmDeleteModal.classList.remove('hidden');
 }
 
@@ -1694,7 +1743,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLoadingOverlay();
     try {
         const [ordersRes, klantenRes, machinesRes] = await Promise.all([
-            fetch(`${API_URL}/orders`),
+            fetch(`${API_URL}/orders?archived=false`),
             fetch(`${API_URL}/klanten`),
             fetch(`${API_URL}/machines`)
         ]);

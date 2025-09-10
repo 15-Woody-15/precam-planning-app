@@ -49,14 +49,23 @@ async function initializeDatabase() {
 }
 
 // --- API ROUTES ---
-app.get('/', (req, res) => {
-  res.json({ message: "Hallo, de Precam-backend (met database) werkt!" });
-});
+// server.js
 
-// --- ORDER ROUTES ---
 app.get('/api/orders', async (req, res) => {
   try {
-    const result = await pool.query('SELECT order_data FROM orders');
+    // Lees de 'archived' query parameter uit de URL (bv. /api/orders?archived=true)
+    const showArchived = req.query.archived === 'true';
+
+    // We filteren direct in de database op basis van de 'isArchived' eigenschap in de JSONB data.
+    // De ::boolean cast zorgt ervoor dat het correct wordt vergeleken.
+    // COALESCE zorgt ervoor dat orders zonder 'isArchived' eigenschap worden gezien als 'false' (dus actief).
+    const query = `
+      SELECT order_data FROM orders 
+      WHERE COALESCE((order_data->>'isArchived')::boolean, false) = $1
+    `;
+    
+    const result = await pool.query(query, [showArchived]);
+    
     res.json(result.rows.map(row => row.order_data));
   } catch (err) {
     console.error("Fout bij ophalen orders:", err);

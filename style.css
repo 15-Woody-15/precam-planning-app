@@ -347,3 +347,71 @@ body {
 }
 
 .animate-spin { animation: spin 1s linear infinite; }
+
+/* Maak de container van de orderlijst scrollbaar */
+section[aria-labelledby="order-list-heading"] .overflow-x-auto {
+    max-height: 22vh; /* Maximaal 22% van de schermhoogte, pas dit getal aan naar wens */
+    overflow-y: auto; /* Voeg een verticale scrollbalk toe als dat nodig is */
+}
+
+/* Maak de tabel-header 'sticky' zodat deze bovenaan blijft */
+#order-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* Zorg dat de sticky header een solide achtergrond heeft (belangrijk voor dark mode) */
+#order-table thead th {
+    background-color: var(--kleur-header-achtergrond);
+}
+
+/* ================================================= */
+/* ==== CSS VOOR COMPACTE LAYOUT ============== */
+/* ================================================= */
+
+/* Verklein de witruimte rond de hele pagina */
+body {
+    padding: 1rem; /* Was p-4 md:p-8 */
+}
+
+/* Verklein de witruimte tussen de grote secties */
+header,
+section[aria-labelledby="new-order-heading"],
+section[aria-labelledby="order-list-heading"],
+section[aria-labelledby="planning-heading"] {
+    margin-bottom: 2rem; /* Was mb-8 (2rem) */
+}
+
+/* Verklein de witruimte binnenin de secties */
+section[aria-labelledby="new-order-heading"] > div,
+section[aria-labelledby="order-list-heading"],
+section[aria-labelledby="planning-heading"] {
+    padding: 1.5rem; /* Was p-6 (1.5rem) */
+}
+
+/* Verklein de lettergroottes van de titels */
+h1 { font-size: 1.5rem; } /* Was text-3xl (1.875rem) */
+h2 { font-size: 1.125rem; } /* Was text-xl (1.25rem) */
+
+/* Maak de tabelrijen compacter */
+#order-table td,
+#order-table th {
+    padding-top: 0.5rem;    /* Was py-3 (0.75rem) */
+    padding-bottom: 0.5rem; /* Was py-3 (0.75rem) */
+}
+
+/* Verklein de witruimte in het 'Nieuwe Order' formulier */
+#add-order-form {
+    padding: 1rem; /* Was p-6 (1.5rem) */
+}
+#add-order-form .grid {
+    gap: 0.75rem; /* Was gap-4 (1rem) */
+    margin-bottom: 1rem; /* Was mb-6 (1.5rem) */
+}
+#parts-container {
+    gap: 0.75rem; /* Was space-y-4 (1rem) */
+}
+.part-entry {
+    padding: 0.75rem; /* Was p-4 (1rem) */
+}
