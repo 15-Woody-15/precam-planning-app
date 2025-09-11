@@ -1,14 +1,13 @@
-// --- CONFIGURatie ---
-const MATERIAAL_STATUS = ['Niet Beschikbaar', 'Besteld', 'Beschikbaar'];
-const STORAGE_KEY = 'planning_orders_v34';
+// --- CONFIGURATION ---
+const MATERIAL_STATUS = ['Not Available', 'Ordered', 'Available'];
+const STORAGE_KEY = 'planning_orders_v35_en';
 
-// --- DATA OPSLAG & STATE ---
+// --- DATA STORAGE & STATE ---
 const storedState = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
 let state = {
     orders: [],
-    klanten: [],
+    customers: [],
     machines: [],
-    isOrderFormCollapsed: storedState.isOrderFormCollapsed || false,
     isLoadModalVisible: storedState.isLoadModalVisible || false,
     machineLoadWeek: storedState.machineLoadWeek || null,
     expandedOrders: new Set(storedState.expandedOrders || []),
@@ -16,22 +15,22 @@ let state = {
     sortKey: 'deadline',
     sortOrder: 'asc',
     searchTerm: '',
-    searchKey: 'klantOrdernr',
+    searchKey: 'customerOrderNr',
 };
 
 function saveState() {
      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-         isOrderFormCollapsed: state.isOrderFormCollapsed,
          isLoadModalVisible: state.isLoadModalVisible,
          machineLoadWeek: state.machineLoadWeek,
          expandedOrders: [...state.expandedOrders],
      }));
 }
 
-// --- DOM ELEMENTEN ---
-let addOrderForm, orderListBody, orderListThead, planningContainer, importDataLink, clearDataLink, prevWeekBtn, nextWeekBtn, searchInput, searchKeySelect, partsContainer, addPartBtn, manageCustomersBtn, customerModal, closeCustomerModalBtn, addCustomerForm, customerListUl, newCustomerNameInput, klantSelect, newOrderHeader, newOrderBody, toggleOrderFormIcon, manageMachinesBtn, machineModal, closeMachineModalBtn, addMachineForm, machineListUl, newMachineNameInput, newMachineHasRobotCheckbox, fullscreenBtn, fullscreenText, fullscreenIconEnter, fullscreenIconExit, actionsDropdownBtn, actionsDropdownMenu, exportDataLink, importFileInput, todayBtn, editOrderModal, editOrderForm, editPartsContainer, cancelEditBtn, saveOrderBtn, editKlantSelect, machineLoadModal, showLoadBtn, prevLoadWeekBtn, nextLoadWeekBtn, loadWeekTitle, loadWeekContent, closeLoadModalBtn, confirmDeleteModal, confirmDeleteBtn, cancelDeleteBtn, deleteConfirmText, deleteConfirmTitle, loadingOverlay, themeToggleBtn, themeToggleDarkIcon, themeToggleLightIcon, addPartToEditBtn;
+// --- DOM ELEMENTS ---
+let addOrderForm, orderListBody, orderListThead, planningContainer, importDataLink, clearDataLink, prevWeekBtn, nextWeekBtn, searchInput, searchKeySelect, partsContainer, addPartBtn, manageCustomersBtn, customerModal, closeCustomerModalBtn, addCustomerForm, customerListUl, newCustomerNameInput, customerSelect, manageMachinesBtn, machineModal, closeMachineModalBtn, addMachineForm, machineListUl, newMachineNameInput, newMachineHasRobotCheckbox, fullscreenBtn, fullscreenText, fullscreenIconEnter, fullscreenIconExit, actionsDropdownBtn, actionsDropdownMenu, exportDataLink, importFileInput, todayBtn, editOrderModal, editOrderForm, editPartsContainer, cancelEditBtn, saveOrderBtn, editCustomerSelect, machineLoadModal, showLoadBtn, prevLoadWeekBtn, nextLoadWeekBtn, loadWeekTitle, loadWeekContent, closeLoadModalBtn, confirmDeleteModal, confirmDeleteBtn, cancelDeleteBtn, deleteConfirmText, deleteConfirmTitle, loadingOverlay, themeToggleBtn, themeToggleDarkIcon, themeToggleLightIcon, addPartToEditBtn, newOrderModal, showNewOrderModalBtn, closeNewOrderModalBtn;
 
 function initializeDOMElements() {
+    // Main page elements
     addOrderForm = document.getElementById('add-order-form');
     orderListBody = document.getElementById('order-list');
     orderListThead = document.querySelector('#order-table thead');
@@ -42,25 +41,7 @@ function initializeDOMElements() {
     nextWeekBtn = document.getElementById('next-week-btn');
     searchInput = document.getElementById('search-input');
     searchKeySelect = document.getElementById('search-key');
-    partsContainer = document.getElementById('parts-container');
-    addPartBtn = document.getElementById('add-part-btn');
-    manageCustomersBtn = document.getElementById('manage-customers-btn');
-    customerModal = document.getElementById('customer-modal');
-    closeCustomerModalBtn = document.getElementById('close-customer-modal-btn');
-    addCustomerForm = document.getElementById('add-customer-form');
-    customerListUl = document.getElementById('customer-list');
-    newCustomerNameInput = document.getElementById('new-customer-name');
-    klantSelect = document.getElementById('klant');
-    newOrderHeader = document.getElementById('new-order-header');
-    newOrderBody = document.getElementById('new-order-body');
-    toggleOrderFormIcon = document.getElementById('toggle-order-form-icon');
-    manageMachinesBtn = document.getElementById('manage-machines-btn');
-    machineModal = document.getElementById('machine-modal');
-    closeMachineModalBtn = document.getElementById('close-machine-modal-btn');
-    addMachineForm = document.getElementById('add-machine-form');
-    machineListUl = document.getElementById('machine-list');
-    newMachineNameInput = document.getElementById('new-machine-name');
-    newMachineHasRobotCheckbox = document.getElementById('new-machine-has-robot');
+    customerSelect = document.getElementById('customer');
     fullscreenBtn = document.getElementById('fullscreen-btn');
     fullscreenText = document.getElementById('fullscreen-text');
     fullscreenIconEnter = document.getElementById('fullscreen-icon-enter');
@@ -70,12 +51,45 @@ function initializeDOMElements() {
     exportDataLink = document.getElementById('export-data-link');
     importFileInput = document.getElementById('import-file-input');
     todayBtn = document.getElementById('today-btn');
+    loadingOverlay = document.getElementById('loading-overlay');
+    themeToggleBtn = document.getElementById('theme-toggle-btn');
+    themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+    themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+
+    // "New Order" Modal elements
+    newOrderModal = document.getElementById('new-order-modal');
+    showNewOrderModalBtn = document.getElementById('show-new-order-modal-btn');
+    closeNewOrderModalBtn = document.getElementById('close-new-order-modal-btn');
+    partsContainer = document.getElementById('parts-container');
+    addPartBtn = document.getElementById('add-part-btn');
+
+    // "Manage Customers" Modal elements
+    manageCustomersBtn = document.getElementById('manage-customers-btn');
+    customerModal = document.getElementById('customer-modal');
+    closeCustomerModalBtn = document.getElementById('close-customer-modal-btn');
+    addCustomerForm = document.getElementById('add-customer-form');
+    customerListUl = document.getElementById('customer-list');
+    newCustomerNameInput = document.getElementById('new-customer-name');
+
+    // "Manage Machines" Modal elements
+    manageMachinesBtn = document.getElementById('manage-machines-btn');
+    machineModal = document.getElementById('machine-modal');
+    closeMachineModalBtn = document.getElementById('close-machine-modal-btn');
+    addMachineForm = document.getElementById('add-machine-form');
+    machineListUl = document.getElementById('machine-list');
+    newMachineNameInput = document.getElementById('new-machine-name');
+    newMachineHasRobotCheckbox = document.getElementById('new-machine-has-robot');
+
+    // "Edit Order" Modal elements
     editOrderModal = document.getElementById('edit-order-modal');
     editOrderForm = document.getElementById('edit-order-form');
     editPartsContainer = document.getElementById('edit-parts-container');
     cancelEditBtn = document.getElementById('cancel-edit-btn');
     saveOrderBtn = document.getElementById('save-order-btn');
-    editKlantSelect = document.getElementById('edit-klant');
+    editCustomerSelect = document.getElementById('edit-customer');
+    addPartToEditBtn = document.getElementById('add-part-to-edit-btn');
+    
+    // "Machine Load" Modal elements
     machineLoadModal = document.getElementById('machine-load-modal');
     showLoadBtn = document.getElementById('show-load-btn');
     prevLoadWeekBtn = document.getElementById('prev-load-week-btn');
@@ -83,19 +97,16 @@ function initializeDOMElements() {
     loadWeekTitle = document.getElementById('load-week-title');
     loadWeekContent = document.getElementById('load-week-content');
     closeLoadModalBtn = document.getElementById('close-load-modal-btn');
+
+    // "Confirm Delete" Modal elements
     confirmDeleteModal = document.getElementById('confirm-delete-modal');
     confirmDeleteBtn = document.getElementById('confirm-delete-btn');
     cancelDeleteBtn = document.getElementById('cancel-delete-btn');
     deleteConfirmText = document.getElementById('delete-confirm-text');
     deleteConfirmTitle = document.getElementById('delete-confirm-title');
-    loadingOverlay = document.getElementById('loading-overlay');
-    themeToggleBtn = document.getElementById('theme-toggle-btn');
-    themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
-    themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
-    addPartToEditBtn = document.getElementById('add-part-to-edit-btn');
 }
 
-// --- HULPFUNCTIES ---
+// --- HELPER FUNCTIONS ---
 function showLoadingOverlay() {
     if (loadingOverlay) loadingOverlay.classList.remove('hidden');
 }
@@ -113,6 +124,7 @@ const formatDateToYMD = (date) => {
     const day = d.getDate().toString().padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
+
 const getWeekNumber = (d) => {
     d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -133,7 +145,7 @@ function showNotification(message, type = 'success') {
     }, 3000);
 }
 
-const getPartDuration = (part) => part.totaalUren || 0;
+const getPartDuration = (part) => part.totalHours || 0;
 
 function debounce(func, timeout = 750){
   let timer;
@@ -143,20 +155,16 @@ function debounce(func, timeout = 750){
   };
 }
 
-// --- API FUNCTIES ---
-// Belangrijk: pas deze URL aan naar 'http://localhost:3000/api' als je lokaal test.
-// Belangrijk: pas deze URL aan naar 'https://precam-planning-api-app.onrender.com/api' als je live test.
-const API_URL = 'https://precam-planning-api-app.onrender.com/api';
+// --- API FUNCTIONS ---
+const API_URL = 'https://precam-planning-api-app.onrender.com/api/orders';
 
 async function replaceAllBackendData(data) {
-    // Deze functie is complexer geworden, omdat we niet alles in één keer kunnen vervangen.
-    // Voor nu focussen we op de order-import. Een volledige import zou aparte calls moeten maken.
     const response = await fetch(`${API_URL}/orders/replace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data.orders),
     });
-    if (!response.ok) throw new Error(`Serverfout bij het vervangen van alle orders: ${response.statusText}`);
+    if (!response.ok) throw new Error(`Server error while replacing all orders: ${response.statusText}`);
     return;
 }
 
@@ -166,7 +174,7 @@ async function addOrderOnBackend(order) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(order),
     });
-    if (!response.ok) throw new Error(`Serverfout bij toevoegen: ${response.statusText}`);
+    if (!response.ok) throw new Error(`Server error on add: ${response.statusText}`);
     return await response.json();
 }
 
@@ -179,7 +187,7 @@ async function updateOrderOnBackend(originalOrderId, updatedOrder) {
     });
     if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Serverfout bij bijwerken: ${response.statusText} (${errorText})`);
+        throw new Error(`Server error on update: ${response.statusText} (${errorText})`);
     }
     return await response.json();
 }
@@ -188,11 +196,11 @@ async function deleteOrderOnBackend(orderId) {
     const response = await fetch(`${API_URL}/orders/${orderId}`, {
         method: 'DELETE',
     });
-    if (!response.ok) throw new Error(`Serverfout bij verwijderen: ${response.statusText}`);
+    if (!response.ok) throw new Error(`Server error on delete: ${response.statusText}`);
     return;
 }
 
-// --- RENDER FUNCTIES ---
+// --- RENDER FUNCTIONS ---
 function renderAll() {
     const scheduleInfo = buildScheduleAndDetectConflicts();
     const machineLoadInfo = calculateMachineLoad(scheduleInfo, state.planningStartDate);
@@ -203,53 +211,44 @@ function renderAll() {
             state.machineLoadWeek = firstWeek;
         }
     }
-
-    applyUiState();
     
     renderMachineLoad(machineLoadInfo);
     renderCustomerDropdown();
     renderOrderList(scheduleInfo);
     renderPlanningGrid(scheduleInfo);
-}   
-
-function applyUiState() {
-    if (state.isOrderFormCollapsed) {
-        newOrderBody.classList.add('hidden');
-        toggleOrderFormIcon.classList.add('rotate-180');
-    } else {
-        newOrderBody.classList.remove('hidden');
-        toggleOrderFormIcon.classList.remove('rotate-180');
-    }
 }
 
 function renderCustomerDropdown() {
-     klantSelect.innerHTML = '<option value="">Kies een klant...</option>';
-     editKlantSelect.innerHTML = '';
-     [...state.klanten].sort().forEach(klant => {
+     if (!customerSelect || !editCustomerSelect) return;
+     customerSelect.innerHTML = '<option value="">Choose a customer...</option>';
+     editCustomerSelect.innerHTML = '';
+     [...state.customers].sort().forEach(customer => {
          const option = document.createElement('option');
-         option.value = klant;
-         option.textContent = klant;
-         klantSelect.appendChild(option);
-         editKlantSelect.appendChild(option.cloneNode(true));
+         option.value = customer;
+         option.textContent = customer;
+         customerSelect.appendChild(option);
+         editCustomerSelect.appendChild(option.cloneNode(true));
      });
 }
 
 function renderCustomerModalList() {
+     if (!customerListUl) return;
      customerListUl.innerHTML = '';
-     [...state.klanten].sort().forEach(klant => {
+     [...state.customers].sort().forEach(customer => {
          const li = document.createElement('li');
          li.className = 'flex justify-between items-center p-2 bg-gray-100 rounded';
-         li.innerHTML = `<span>${klant}</span><button class="delete-customer-btn text-red-500 hover:text-red-700 font-bold px-2" data-klant="${klant}" aria-label="Verwijder klant ${klant}">&times;</button>`;
+         li.innerHTML = `<span>${customer}</span><button class="delete-customer-btn text-red-500 hover:text-red-700 font-bold px-2" data-customer="${customer}" aria-label="Delete customer ${customer}">&times;</button>`;
          customerListUl.appendChild(li);
      });
 }
 
 function renderMachineModalList() {
+     if (!machineListUl) return;
      machineListUl.innerHTML = '';
      [...state.machines].sort((a,b) => a.name.localeCompare(b.name)).forEach(machine => {
          const li = document.createElement('li');
          li.className = 'flex justify-between items-center p-2 bg-gray-100 rounded';
-         li.innerHTML = `<span>${machine.name} ${machine.hasRobot ? '🤖' : ''}</span><button class="delete-machine-btn text-red-500 hover:text-red-700 font-bold px-2" data-machine-name="${machine.name}" aria-label="Verwijder machine ${machine.name}">&times;</button>`;
+         li.innerHTML = `<span>${machine.name} ${machine.hasRobot ? '🤖' : ''}</span><button class="delete-machine-btn text-red-500 hover:text-red-700 font-bold px-2" data-machine-name="${machine.name}" aria-label="Delete machine ${machine.name}">&times;</button>`;
          machineListUl.appendChild(li);
      });
 }
@@ -273,7 +272,7 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
     const filteredOrders = state.orders.filter(order => {
         if (!state.searchTerm) return true;
         const term = state.searchTerm.toLowerCase();
-        if(state.searchKey === 'id' || state.searchKey === 'klant' || state.searchKey === 'klantOrdernr'){
+        if(['id', 'customer', 'customerOrderNr'].includes(state.searchKey)){
             return (order[state.searchKey] || '').toString().toLowerCase().includes(term);
         }
         return order.parts.some(part => (part[state.searchKey] || '').toString().toLowerCase().includes(term));
@@ -292,9 +291,9 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
         return state.sortOrder === 'asc' ? comparison : -comparison;
     });
 
-    const conflictIcon = `<svg class="inline-block h-5 w-5 text-red-500" title="Conflict gedetecteerd" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.031-1.742 3.031H4.42c-1.532 0-2.492-1.697-1.742-3.031l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>`;
-    const delayedIcon = `<svg class="inline-block h-5 w-5 text-yellow-500" title="Eén of meer onderdelen hebben een vertraagde start" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>`;
-    const deadlineMissedIcon = `<svg class="inline-block h-5 w-5 text-red-600" title="Leverdatum wordt niet gehaald!" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5H10.75V5z" clip-rule="evenodd" /></svg>`;
+    const conflictIcon = `<svg class="inline-block h-5 w-5 text-red-500" title="Conflict detected" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.031-1.742 3.031H4.42c-1.532 0-2.492-1.697-1.742-3.031l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>`;
+    const delayedIcon = `<svg class="inline-block h-5 w-5 text-yellow-500" title="One or more parts have a delayed start" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>`;
+    const deadlineMissedIcon = `<svg class="inline-block h-5 w-5 text-red-600" title="Deadline will be missed!" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5H10.75V5z" clip-rule="evenodd" /></svg>`;
     
     sortedOrders.forEach(order => {
         const groupTr = document.createElement('tr');
@@ -311,7 +310,7 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
         });
         const willMissDeadline = deadlineInfo.get(order.id);
         const deadlineDate = new Date(order.deadline + 'T00:00:00');
-        const deadlineText = deadlineDate.toLocaleDateString('nl-NL');
+        const deadlineText = deadlineDate.toLocaleDateString('en-GB');
         let deadlineSpan = `<span>${deadlineText}</span>`;
         const isUpcomingInNext7Days = deadlineDate >= today && deadlineDate <= oneWeekFromNow;
 
@@ -319,33 +318,44 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
             deadlineSpan = `<span class="bg-red-500 text-white px-2 py-1 rounded-full font-bold">${deadlineText}</span>`;
         } else if (isUpcomingInNext7Days) {
             deadlineSpan = `<span class="bg-yellow-200 text-yellow-900 px-2 py-1 rounded-full font-semibold">${deadlineText}</span>`;
-        } else if (deadlineDate < today && overallStatus !== 'Voltooid') {
+        } else if (deadlineDate < today && overallStatus !== 'Completed') {
             deadlineSpan = `<span class="bg-red-200 text-red-900 px-2 py-1 rounded-full font-semibold">${deadlineText}</span>`;
         }
         
-        const klantOrdernrTitle = order.klantOrdernr ? `title="Ordernr. Klant: ${order.klantOrdernr}"` : '';
+        const customerOrderNrTitle = order.customerOrderNr ? `title="Customer Order No: ${order.customerOrderNr}"` : '';
 
         groupTr.innerHTML = `
             <td class="px-3 py-3 whitespace-nowrap">
                 <div class="flex items-center">
-                    <input type="checkbox" title="Spoedorder" class="toggle-urgent-btn h-4 w-4 rounded border-gray-300 text-indigo-600 mr-3" data-order-id="${order.id}" ${order.isUrgent ? 'checked' : ''}>
+                    <input type="checkbox" title="Urgent Order" class="toggle-urgent-btn h-4 w-4 rounded border-gray-300 text-indigo-600 mr-3" data-order-id="${order.id}" ${order.isUrgent ? 'checked' : ''}>
                     ${willMissDeadline ? `<div class="mr-2">${deadlineMissedIcon}</div>` : ''}
                     ${orderHasConflict ? `<div class="mr-2">${conflictIcon}</div>` : ''}
                     ${orderHasDelayedParts ? `<div class="mr-2">${delayedIcon}</div>` : ''}
                     <div>
-                        <span class="font-bold" ${klantOrdernrTitle}>${order.isUrgent ? '🔥 ' : ''}${order.id}</span>
-                        <span class="font-normal text-gray-600">(${order.klant})</span>
+                        <span class="font-bold" ${customerOrderNrTitle}>${order.isUrgent ? '🔥 ' : ''}${order.id}</span>
+                        <span class="font-normal text-gray-600">(${order.customer})</span>
                     </div>
                 </div>
             </td>
-            <td class="px-3 py-3 text-sm font-semibold">${totalOrderHoursFormatted} uur</td>
+            <td class="px-3 py-3 text-sm font-semibold">${totalOrderHoursFormatted} hrs</td>
             <td></td>
             <td class="px-3 py-3"></td>
             <td class="px-3 py-3 text-center">${deadlineSpan}</td>
-            <td class="px-3 py-3" colspan="4">${overallStatus} (${order.parts.length} onderdelen)</td>
+            <td class="px-3 py-3" colspan="4">
+                ${(() => {
+                    let statusClass = '';
+                    switch (overallStatus) {
+                        case 'To Be Planned': statusClass = 'status-badge status-tbp'; break;
+                        case 'In Production': statusClass = 'status-badge status-inp'; break;
+                        case 'Completed': statusClass = 'status-badge status-com'; break;
+                        default: return `<span>${overallStatus}</span>`;
+                    }
+                    return `<span class="${statusClass}">${overallStatus}</span>`;
+                })()}
+                <span class="text-gray-500 text-sm ml-2">(${order.parts.length} parts)</span>
+            </td>
             <td class="px-3 py-3 text-right">
-                ${overallStatus === 'Voltooid' ? `<button class="archive-order-btn text-sm text-green-600 hover:underline font-semibold mr-4" data-order-id="${order.id}">Archiveer</button>` : ''}
-                <button class="edit-order-btn text-sm text-blue-600 hover:underline font-semibold" data-order-id="${order.id}">Bewerken</button>
+                <button class="edit-order-btn text-sm text-blue-600 hover:underline font-semibold" data-order-id="${order.id}">Edit</button>
             </td>
         `;
         orderListBody.appendChild(groupTr);
@@ -357,46 +367,46 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
             const partHasConflict = conflicts.has(part.id);
             let statusBadge;
             switch (part.status) {
-                case 'Ingepland': statusBadge = `<span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Ingepland</span>`; break;
-                case 'Voltooid': statusBadge = `<span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Voltooid</span>`; break;
-                default: statusBadge = `<span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Te plannen</span>`;
+                case 'Scheduled': statusBadge = `<span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Scheduled</span>`; break;
+                case 'Completed': statusBadge = `<span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Completed</span>`; break;
+                default: statusBadge = `<span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">To Be Planned</span>`;
             }
-            let materiaalBadge;
-            switch (part.materiaalStatus) {
-                case 'Beschikbaar': materiaalBadge = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Beschikbaar</span>`; break;
-                case 'Besteld': materiaalBadge = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Besteld</span>`; break;
-                default: materiaalBadge = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Niet Beschikbaar</span>`;
+            let materialBadge;
+            switch (part.materialStatus) {
+                case 'Available': materialBadge = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Available</span>`; break;
+                case 'Ordered': materialBadge = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Ordered</span>`; break;
+                default: materialBadge = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Not Available</span>`;
             }
             const selectedMachine = state.machines.find(m => m.name === part.machine);
-            let shiftOptions = `<option value="8" ${part.shift === 8 ? 'selected': ''}>Dag (8u)</option>`;
+            let shiftOptions = `<option value="8" ${part.shift === 8 ? 'selected': ''}>Day (8h)</option>`;
             if (selectedMachine) {
                 if (selectedMachine.name.includes('DMU')) {
-                    shiftOptions += `<option value="16" ${part.shift === 16 ? 'selected': ''}>Dag+Nacht (16u)</option>`;
+                    shiftOptions += `<option value="16" ${part.shift === 16 ? 'selected': ''}>Day+Night (16h)</option>`;
                 }
                 if (selectedMachine.hasRobot) {
-                    shiftOptions += `<option value="24" ${part.shift === 24 ? 'selected': ''}>Continu (24u)</option>`;
+                    shiftOptions += `<option value="24" ${part.shift === 24 ? 'selected': ''}>Continuous (24h)</option>`;
                 }
             }
             const info = partScheduleInfo.get(part.id) || {};
             const isDelayed = info.isDelayed;
             const startDateInputClass = `bg-gray-50 start-date-input rounded-md border-gray-300 text-sm ${isDelayed ? 'delayed-start' : ''}`;
-            const startDateTitle = isDelayed ? `Let op: Werkelijke start is ${new Date(info.actualStartDate).toLocaleDateString('nl-NL')}, later dan gepland.` : '';
+            const startDateTitle = isDelayed ? `Warning: Actual start is ${new Date(info.actualStartDate).toLocaleDateString('en-GB')}, later than planned.` : '';
             tr.innerHTML = `
-                <td class="pl-8 pr-3 py-3 whitespace-nowrap" title="Tekening: ${part.tekeningNummer}">
-                    <div class="text-sm font-medium text-gray-900">${part.onderdeelNaam}</div>
+                <td class="pl-8 pr-3 py-3 whitespace-nowrap" title="Drawing: ${part.drawingNumber}">
+                    <div class="text-sm font-medium text-gray-900">${part.partName}</div>
                     <div class="text-xs text-gray-500">${part.id}</div>
                 </td>
-                <td class="px-3 py-3 text-sm duration-cell" data-part-id="${part.id}" title="Klik om te bewerken. Totaal: ${Math.round(getPartDuration(part) * 60)}min">${part.productieTijdPerStuk} min/st</td>
-                <td class="px-3 py-3 text-sm">${part.aantal} st</td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm"><button class="materiaal-status-btn" data-part-id="${part.id}">${materiaalBadge}</button></td>
+                <td class="px-3 py-3 text-sm duration-cell" data-part-id="${part.id}" title="Click to edit. Total: ${Math.round(getPartDuration(part) * 60)}min">${part.productionTimePerPiece} min/pc</td>
+                <td class="px-3 py-3 text-sm">${part.quantity} pcs</td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm"><button class="material-status-btn" data-part-id="${part.id}">${materialBadge}</button></td>
                 <td class="px-3 py-3"></td>
                 <td class="px-3 py-3 whitespace-nowrap"><div class="flex items-center">${statusBadge} ${partHasConflict ? `<div class="ml-2">${conflictIcon}</div>` : ''}</div></td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm"><select class="bg-gray-50 machine-select rounded-md border-gray-300 text-sm" data-part-id="${part.id}"><option value="">Kies...</option>${state.machines.map(m => `<option value="${m.name}" ${part.machine === m.name ? 'selected' : ''}>${m.name}</option>`).join('')}</select></td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm"><select class="bg-gray-50 machine-select rounded-md border-gray-300 text-sm" data-part-id="${part.id}"><option value="">Choose...</option>${state.machines.map(m => `<option value="${m.name}" ${part.machine === m.name ? 'selected' : ''}>${m.name}</option>`).join('')}</select></td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm"><select class="bg-gray-50 shift-select rounded-md border-gray-300 text-sm" data-part-id="${part.id}" ${!part.machine ? 'disabled' : ''}>${shiftOptions}</select></td>
                 <td class="px-3 py-3 whitespace-nowrap"><input type="date" class="${startDateInputClass}" data-part-id="${part.id}" value="${part.startDate || ''}" title="${startDateTitle}"></td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm font-medium">
-                    <button class="toggle-status-btn text-green-600 hover:text-green-900" data-part-id="${part.id}">${part.status === 'Voltooid' ? 'Heropen' : 'Voltooid'}</button>
-                    <button class="delete-btn text-red-600 hover:text-red-900 ml-4" data-part-id="${part.id}">Verwijder</button>
+                    <button class="toggle-status-btn text-green-600 hover:text-green-900" data-part-id="${part.id}">${part.status === 'Completed' ? 'Reopen' : 'Complete'}</button>
+                    <button class="delete-btn text-red-600 hover:text-red-900 ml-4" data-part-id="${part.id}">Delete</button>
                 </td>
             `;
             orderListBody.appendChild(tr);
@@ -406,10 +416,10 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
 
 function getOverallOrderStatus(order) {
      const partStatuses = order.parts.map(p => p.status);
-     if (partStatuses.length === 0) return 'Leeg';
-     if (partStatuses.every(s => s === 'Voltooid')) return 'Voltooid';
-     if (partStatuses.some(s => s === 'Ingepland')) return 'In Productie';
-     return 'Te Plannen';
+     if (partStatuses.length === 0) return 'Empty';
+     if (partStatuses.every(s => s === 'Completed')) return 'Completed';
+     if (partStatuses.some(s => s === 'Scheduled')) return 'In Production';
+     return 'To Be Planned';
 }
 
 function buildScheduleAndDetectConflicts() {
@@ -426,7 +436,7 @@ function buildScheduleAndDetectConflicts() {
                 return { ...part, isUrgent: order.isUrgent };
             })
         )
-        .filter(p => p.machine && p.startDate && p.status !== 'Voltooid')
+        .filter(p => p.machine && p.startDate && p.status !== 'Completed')
         .sort((a,b) => new Date(a.startDate) - new Date(b.startDate) || (b.isUrgent - a.isUrgent));
 
     partsToSchedule.forEach(part => {
@@ -523,7 +533,7 @@ function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
     const processedParts = new Set();
     const msPerDay = 1000 * 60 * 60 * 24;
     const machineNameIndexMap = new Map(state.machines.map((m, i) => [m.name, i]));
-    const partsToDraw = state.orders.flatMap(o => o.parts.filter(p => p.machine && p.startDate && p.status !== 'Voltooid'));
+    const partsToDraw = state.orders.flatMap(o => o.parts.filter(p => p.machine && p.startDate && p.status !== 'Completed'));
     
     partsToDraw.forEach(originalPart => {
         if (processedParts.has(originalPart.id)) return;
@@ -594,7 +604,7 @@ function renderPlanningGrid(scheduleInfo) {
 
     let currentDate = new Date(gridStartDate);
     for (let i = 0; i < 30; i++) {
-        const monthYear = currentDate.toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
+        const monthYear = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         const week = getWeekNumber(currentDate);
         if (!monthSpans[monthYear]) monthSpans[monthYear] = 0;
         monthSpans[monthYear]++;
@@ -626,7 +636,7 @@ function renderPlanningGrid(scheduleInfo) {
     for (let i = 0; i < 30; i++) {
         const cell = document.createElement('div');
         cell.className = 'grid-header day-header';
-        cell.innerHTML = `${currentDate.getDate()}<br>${currentDate.toLocaleDateString('nl-NL', { weekday: 'short' })}`;
+        cell.innerHTML = `${currentDate.getDate()}<br>${currentDate.toLocaleDateString('en-US', { weekday: 'short' })}`;
         if (formatDateToYMD(currentDate) === todayString) cell.classList.add('bg-indigo-200');
         cell.style.gridColumn = i + 2;
         cell.style.gridRow = 3;
@@ -671,24 +681,24 @@ function renderPlanningGrid(scheduleInfo) {
             sum += order.id.charCodeAt(i);
         }
         const colorIndex = (sum % 5) + 1;
-        const materiaalKlasse = originalPart.materiaalStatus !== 'Beschikbaar' ? 'materiaal-ontbreekt' : '';
+        const materialClass = originalPart.materialStatus !== 'Available' ? 'material-missing' : '';
         const isConflict = conflicts.has(originalPart.id);
-        const urgentKlasse = order.isUrgent ? 'urgent-block' : '';
+        const urgentClass = order.isUrgent ? 'urgent-block' : '';
         const deadlineMissedClass = deadlineInfo.get(order.id) ? 'deadline-missed-block' : '';
-        const conflictKlasse = isConflict ? 'order-conflict' : `color-${colorIndex}`;
-        orderBlock.className = `order-block ${materiaalKlasse} ${conflictKlasse} ${urgentKlasse} ${deadlineMissedClass}`;
+        const conflictClass = isConflict ? 'order-conflict' : `color-${colorIndex}`;
+        orderBlock.className = `order-block ${materialClass} ${conflictClass} ${urgentClass} ${deadlineMissedClass}`;
         const machine = state.machines.find(m => m.name === originalPart.machine);
         const usesRobot = machine && machine.hasRobot && originalPart.shift > 8;
         let shiftText;
         switch (originalPart.shift) {
-            case 12: shiftText = 'Nacht (12u)'; break;
-            case 16: shiftText = 'Dag+Nacht (16u)'; break;
-            case 24: shiftText = 'Continu (24u)'; break;
-            default: shiftText = 'Dag (8u)';
+            case 12: shiftText = 'Night (12h)'; break;
+            case 16: shiftText = 'Day+Night (16h)'; break;
+            case 24: shiftText = 'Continuous (24h)'; break;
+            default: shiftText = 'Day (8h)';
         }
-        let title = `${originalPart.id} - ${originalPart.onderdeelNaam}\nAantal: ${originalPart.aantal} st\nShift: ${shiftText} ${usesRobot ? '(met Robot)' : ''}\nTotale duur: ${getPartDuration(originalPart).toFixed(1)} uur\nKlant: ${order.klant}`;
+        let title = `${originalPart.id} - ${originalPart.partName}\nQuantity: ${originalPart.quantity} pcs\nShift: ${shiftText} ${usesRobot ? '(with Robot)' : ''}\nTotal duration: ${getPartDuration(originalPart).toFixed(1)} hours\nCustomer: ${order.customer}`;
         if (isConflict) {
-            title += `\n\nCONFLICT MET: ${conflicts.get(originalPart.id).join(', ')}`;
+            title += `\n\nCONFLICT WITH: ${conflicts.get(originalPart.id).join(', ')}`;
         }
         orderBlock.title = title;
         const blockContent = `<span>${usesRobot ? '🤖 ' : ''}${originalPart.id.substring(4)}</span>`;
@@ -709,13 +719,13 @@ function createNewPartForm() {
     partDiv.className = 'part-entry grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end border p-4 rounded-md relative';
     partDiv.dataset.partIndex = partCounter;
     partDiv.innerHTML = `
-        <div><label for="onderdeel-naam-${partCounter}" class="block text-sm font-medium text-gray-700">Naam Onderdeel</label><input type="text" id="onderdeel-naam-${partCounter}" class="bg-gray-50 part-field mt-1 block w-full rounded-md border-gray-300" data-field="onderdeelNaam" required></div>
-        <div><label for="tekening-nummer-${partCounter}" class="block text-sm font-medium text-gray-700">Tekening Nummer</label><input type="text" id="tekening-nummer-${partCounter}" class="bg-gray-50 part-field mt-1 block w-full rounded-md border-gray-300" data-field="tekeningNummer"></div>
-        <div><label for="aantal-${partCounter}" class="block text-sm font-medium text-gray-700">Aantal</label><input type="number" id="aantal-${partCounter}" min="1" class="bg-gray-50 part-field mt-1 block w-full rounded-md border-gray-300" data-field="aantal" required></div>
-        <div><label for="productietijd-per-stuk-${partCounter}" class="block text-sm font-medium text-gray-700">Prod. (min./stuk)</label><input type="number" id="productietijd-per-stuk-${partCounter}" min="1" step="1" class="bg-gray-50 part-field mt-1 block w-full rounded-md border-gray-300" data-field="productieTijdPerStuk" required></div>
+        <div><label for="part-name-${partCounter}" class="block text-sm font-medium text-gray-700">Part Name</label><input type="text" id="part-name-${partCounter}" class="bg-gray-50 part-field mt-1 block w-full rounded-md border-gray-300" data-field="partName" required></div>
+        <div><label for="drawing-number-${partCounter}" class="block text-sm font-medium text-gray-700">Drawing Number</label><input type="text" id="drawing-number-${partCounter}" class="bg-gray-50 part-field mt-1 block w-full rounded-md border-gray-300" data-field="drawingNumber"></div>
+        <div><label for="quantity-${partCounter}" class="block text-sm font-medium text-gray-700">Quantity</label><input type="number" id="quantity-${partCounter}" min="1" class="bg-gray-50 part-field mt-1 block w-full rounded-md border-gray-300" data-field="quantity" required></div>
+        <div><label for="prod-time-per-piece-${partCounter}" class="block text-sm font-medium text-gray-700">Prod. (min/piece)</label><input type="number" id="prod-time-per-piece-${partCounter}" min="1" step="1" class="bg-gray-50 part-field mt-1 block w-full rounded-md border-gray-300" data-field="productionTimePerPiece" required></div>
         <div class="flex items-center h-10 col-span-full">
-            <input id="materiaal-in-stock-${partCounter}" type="checkbox" class="part-field h-4 w-4 rounded border-gray-300 text-indigo-600" data-field="materiaalInStock">
-            <label for="materiaal-in-stock-${partCounter}" class="ml-2 block text-sm text-gray-900">Materiaal in stock</label>
+            <input id="material-in-stock-${partCounter}" type="checkbox" class="part-field h-4 w-4 rounded border-gray-300 text-indigo-600" data-field="materialInStock">
+            <label for="material-in-stock-${partCounter}" class="ml-2 block text-sm text-gray-900">Material in stock</label>
         </div>
         ${partCounter > 1 ? '<button type="button" class="remove-part-btn absolute top-2 right-2 text-red-500 hover:text-red-700">&times;</button>' : ''}
     `;
@@ -723,20 +733,19 @@ function createNewPartForm() {
     partDiv.querySelector('.remove-part-btn')?.addEventListener('click', () => partDiv.remove());
 }
 
-
 // --- EVENT HANDLERS ---
 function setupEventListeners() {
-    // --- THEMA WISSEL LOGICA ---
+    // --- THEME TOGGLE LOGIC ---
     if (themeToggleBtn) {
         const applyTheme = (theme) => {
             if (theme === 'dark') {
                 document.documentElement.classList.add('dark');
-                themeToggleLightIcon.classList.remove('hidden');
-                themeToggleDarkIcon.classList.add('hidden');
+                if(themeToggleLightIcon) themeToggleLightIcon.classList.remove('hidden');
+                if(themeToggleDarkIcon) themeToggleDarkIcon.classList.add('hidden');
             } else {
                 document.documentElement.classList.remove('dark');
-                themeToggleDarkIcon.classList.remove('hidden');
-                themeToggleLightIcon.classList.add('hidden');
+                if(themeToggleDarkIcon) themeToggleDarkIcon.classList.remove('hidden');
+                if(themeToggleLightIcon) themeToggleLightIcon.classList.add('hidden');
             }
         };
         const savedTheme = localStorage.getItem('theme');
@@ -760,17 +769,36 @@ function setupEventListeners() {
         });
     }
 
-    addOrderForm.addEventListener('submit', async (e) => {
+    // --- "ADD ORDER" MODAL LOGIC ---
+    if(showNewOrderModalBtn) showNewOrderModalBtn.addEventListener('click', () => {
+        addOrderForm.reset();
+        partsContainer.innerHTML = '';
+        createNewPartForm(); // Start with one fresh part form
+        newOrderModal.classList.remove('hidden');
+        document.getElementById('order-id').focus();
+    });
+
+    if(closeNewOrderModalBtn) closeNewOrderModalBtn.addEventListener('click', () => {
+        newOrderModal.classList.add('hidden');
+    });
+
+    if(newOrderModal) newOrderModal.addEventListener('click', (e) => {
+        if (e.target.id === 'new-order-modal') {
+            newOrderModal.classList.add('hidden');
+        }
+    });
+
+    if(addOrderForm) addOrderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const mainOrderId = document.getElementById('order-id').value;
         if (state.orders.some(o => o.id === mainOrderId)) {
-            showNotification('Ordernummer bestaat al.', 'error');
+            showNotification('Order number already exists.', 'error');
             return;
         }
         const newOrder = {
             id: mainOrderId,
-            klant: document.getElementById('klant').value,
-            klantOrdernr: document.getElementById('klant-ordernummer').value,
+            customer: document.getElementById('customer').value,
+            customerOrderNr: document.getElementById('customer-order-nr').value,
             deadline: document.getElementById('deadline').value,
             isUrgent: document.getElementById('is-urgent').checked,
             parts: []
@@ -778,24 +806,25 @@ function setupEventListeners() {
         const partForms = partsContainer.querySelectorAll('.part-entry');
         partForms.forEach((partForm, index) => {
             const partId = `${mainOrderId}-${index + 1}`;
-            const productieTijdInMinuten = parseFloat(partForm.querySelector('[data-field="productieTijdPerStuk"]').value);
+            const productionTimeInMinutes = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value);
+            const quantity = parseInt(partForm.querySelector('[data-field="quantity"]').value);
             const newPart = {
                 id: partId,
-                onderdeelNaam: partForm.querySelector('[data-field="onderdeelNaam"]').value,
-                tekeningNummer: partForm.querySelector('[data-field="tekeningNummer"]').value,
-                aantal: parseInt(partForm.querySelector('[data-field="aantal"]').value),
-                productieTijdPerStuk: productieTijdInMinuten,
-                materiaalStatus: partForm.querySelector('[data-field="materiaalInStock"]').checked ? 'Beschikbaar' : 'Niet Beschikbaar',
-                status: 'Nog in te plannen',
+                partName: partForm.querySelector('[data-field="partName"]').value,
+                drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value,
+                quantity: quantity,
+                productionTimePerPiece: productionTimeInMinutes,
+                materialStatus: partForm.querySelector('[data-field="materialInStock"]').checked ? 'Available' : 'Not Available',
+                status: 'To Be Planned',
                 machine: null,
                 startDate: null,
                 shift: 8,
-                totaalUren: (parseInt(partForm.querySelector('[data-field="aantal"]').value) * productieTijdInMinuten) / 60,
+                totalHours: (quantity * productionTimeInMinutes) / 60,
             };
             newOrder.parts.push(newPart);
         });
         if (newOrder.parts.length === 0) {
-            showNotification("Voeg minstens één onderdeel toe aan de order.", "error");
+            showNotification("Please add at least one part to the order.", "error");
             return;
         }
         
@@ -803,221 +832,189 @@ function setupEventListeners() {
         try {
             await addOrderOnBackend(newOrder);
             state.orders.push(newOrder);
+            newOrderModal.classList.add('hidden'); // Close modal on success
             renderAll();
-            addOrderForm.reset();
-            partsContainer.innerHTML = '';
-            createNewPartForm();
-            document.getElementById('order-id').focus();
-            showNotification(`Order ${newOrder.id} succesvol opgeslagen!`, 'success');
+            showNotification(`Order ${newOrder.id} saved successfully!`, 'success');
         } catch (error) {
-            console.error("Fout bij opslaan op server:", error);
-            showNotification(`Kon order niet opslaan: ${error.message}`, "error");
+            console.error("Error saving to server:", error);
+            showNotification(`Could not save order: ${error.message}`, "error");
         } finally {
             hideLoadingOverlay();
         }
     });
 
-    addPartBtn.addEventListener('click', createNewPartForm);
+    if(addPartBtn) addPartBtn.addEventListener('click', createNewPartForm);
 
     const debouncedSave = debounce(async (part) => {
         const order = state.orders.find(o => o.parts.some(p => p.id === part.id));
         if (order) {
             try {
                 await updateOrderOnBackend(order.id, order);
-                showNotification(`Wijziging voor order ${order.id} opgeslagen!`, 'success');
+                showNotification(`Changes for order ${order.id} saved!`, 'success');
             } catch (error) {
-                showNotification(`Synchronisatiefout: ${error.message}`, 'error');
+                showNotification(`Synchronization error: ${error.message}`, 'error');
             }
         }
     }, 750);
     
-    orderListBody.addEventListener('change', (e) => {
-        const target = e.target;
-        const partId = target.dataset.partId;
-        if (!partId) return;
+    if(orderListBody) {
+        orderListBody.addEventListener('change', (e) => {
+            const target = e.target;
+            const partId = target.dataset.partId;
+            if (!partId) return;
 
-        const part = findPart(partId);
-        if (!part) return;
-
-        if (target.classList.contains('machine-select')) {
-            part.machine = target.value;
-        } else if (target.classList.contains('shift-select')) {
-            part.shift = parseInt(target.value);
-        } else if (target.classList.contains('start-date-input')) {
-            part.startDate = target.value;
-        }
-        part.status = (part.machine && part.startDate) ? 'Ingepland' : 'Nog in te plannen';
-
-        renderAll();
-        debouncedSave(part);
-    });
-
-    orderListBody.addEventListener('click', async (e) => {
-        const target = e.target;
-
-        if (target.classList.contains('toggle-urgent-btn')) {
-            e.stopPropagation();
-            const orderId = target.dataset.orderId;
-            const order = state.orders.find(o => o.id === orderId);
-            if (order) {
-                const originalValue = order.isUrgent;
-                order.isUrgent = target.checked;
-                renderAll();
-                showLoadingOverlay();
-                try {
-                    await updateOrderOnBackend(order.id, order);
-                    showNotification(`Spoedstatus voor order ${order.id} opgeslagen!`, 'success');
-                } catch (error) {
-                    order.isUrgent = originalValue;
-                    renderAll();
-                    showNotification(`Fout bij opslaan spoedstatus: ${error.message}`, 'error');
-                } finally {
-                    hideLoadingOverlay();
-                }
-            }
-            return;
-        }
-
-        const groupRow = target.closest('.order-group-row');
-        if (groupRow && !target.closest('button, input, a')) {
-            const orderId = groupRow.dataset.orderId;
-            if (state.expandedOrders.has(orderId)) {
-                state.expandedOrders.delete(orderId);
-            } else {
-                state.expandedOrders.add(orderId);
-            }
-            renderAll();
-            saveState();
-            return;
-        }
-
-        const button = target.closest('button');
-        if (button) {
-            let partId = button.dataset.partId;
-            let orderId = button.dataset.orderId || (findPart(partId) ? state.orders.find(o => o.parts.some(p => p.id === partId))?.id : null);
-
-            if (button.classList.contains('edit-order-btn')) {
-                e.stopPropagation();
-                openEditModal(orderId);
-                return;
-            }
-
-            if (button.classList.contains('archive-order-btn')) {
-                e.stopPropagation();
-                
-                // --- DEZE AANROEP IS NU BIJGEWERKT ---
-                openConfirmModal(
-                    'Order Archiveren',
-                    `Weet je zeker dat je order "${orderId}" wilt archiveren?`,
-                    async () => {
-                        showLoadingOverlay();
-                        try {
-                            const orderToArchive = state.orders.find(o => o.id === orderId);
-                            if (orderToArchive) {
-                                orderToArchive.isArchived = true;
-                                await updateOrderOnBackend(orderId, orderToArchive);
-                                state.orders = state.orders.filter(o => o.id !== orderId); // Verwijder uit de actieve lijst
-                                renderAll();
-                                showNotification(`Order ${orderId} gearchiveerd.`, 'success');
-                            }
-                        } catch (error) {
-                            showNotification(`Kon order niet archiveren: ${error.message}`, 'error');
-                        } finally {
-                            hideLoadingOverlay();
-                        }
-                    },
-                    'Ja, archiveer', // De nieuwe tekst
-                    'green'           // De nieuwe kleur
-                );
-                return;
-            }
-
-            let part = partId ? findPart(partId) : null;
-            let order = orderId ? state.orders.find(o => o.id === orderId) : null;
-            if (!part || !order) return;
-
-            if (button.classList.contains('delete-btn')) {
-                openConfirmModal(
-                    'Onderdeel Verwijderen', 
-                    `Weet je zeker dat je onderdeel "${part.id}" wilt verwijderen?`,
-                    async () => {
-                        const orderContainingPart = state.orders.find(o => o.parts.some(p => p.id === part.id));
-                        if (!orderContainingPart) return;
-                        
-                        showLoadingOverlay();
-                        try {
-                            const originalOrders = JSON.parse(JSON.stringify(state.orders));
-                            
-                            orderContainingPart.parts = orderContainingPart.parts.filter(p => p.id !== part.id);
-
-                            if (orderContainingPart.parts.length === 0) {
-                                state.orders = state.orders.filter(o => o.id !== orderContainingPart.id);
-                                await deleteOrderOnBackend(orderContainingPart.id);
-                                showNotification(`Order ${orderContainingPart.id} verwijderd.`, 'success');
-                            } else {
-                                await updateOrderOnBackend(orderContainingPart.id, orderContainingPart);
-                                showNotification(`Onderdeel verwijderd.`, 'success');
-                            }
-                        } catch(error) {
-                            showNotification(`Kon onderdeel niet verwijderen: ${error.message}`, 'error');
-                            state.orders = originalOrders;
-                        } finally {
-                            renderAll();
-                            hideLoadingOverlay();
-                        }
-                    }
-                );
-                return;
-            }
-
-            if (button.classList.contains('toggle-status-btn')) {
-                part.status = part.status === 'Voltooid' ? 'Ingepland' : 'Voltooid';
-                renderAll();
-                debouncedSave(part);
-                return;
-            }
-
-            if (button.classList.contains('materiaal-status-btn')) {
-                const currentIndex = MATERIAAL_STATUS.indexOf(part.materiaalStatus);
-                part.materiaalStatus = MATERIAAL_STATUS[(currentIndex + 1) % MATERIAAL_STATUS.length];
-                renderAll();
-                debouncedSave(part);
-                return;
-            }
-        }
-
-        const durationCell = target.closest('.duration-cell');
-        if (durationCell && !durationCell.querySelector('input')) {
-            const partId = durationCell.dataset.partId;
             const part = findPart(partId);
             if (!part) return;
 
-            const originalValue = part.productieTijdPerStuk;
-            durationCell.innerHTML = `<input type="number" class="w-16 text-center" value="${originalValue}" />`;
-            const input = durationCell.querySelector('input');
-            input.focus();
-            input.select();
+            if (target.classList.contains('machine-select')) {
+                part.machine = target.value;
+            } else if (target.classList.contains('shift-select')) {
+                part.shift = parseInt(target.value);
+            } else if (target.classList.contains('start-date-input')) {
+                part.startDate = target.value;
+            }
+            part.status = (part.machine && part.startDate) ? 'Scheduled' : 'To Be Planned';
 
-            const saveChange = () => {
-                const newValue = parseInt(input.value);
-                if (!isNaN(newValue) && newValue >= 0) {
-                    part.productieTijdPerStuk = newValue;
-                    part.totaalUren = (part.aantal * newValue) / 60;
+            renderAll();
+            debouncedSave(part);
+        });
+
+        orderListBody.addEventListener('click', async (e) => {
+            const target = e.target;
+
+            if (target.classList.contains('toggle-urgent-btn')) {
+                e.stopPropagation();
+                const orderId = target.dataset.orderId;
+                const order = state.orders.find(o => o.id === orderId);
+                if (order) {
+                    const originalValue = order.isUrgent;
+                    order.isUrgent = target.checked;
+                    renderAll();
+                    showLoadingOverlay();
+                    try {
+                        await updateOrderOnBackend(order.id, order);
+                        showNotification(`Urgent status for order ${order.id} saved!`, 'success');
+                    } catch (error) {
+                        order.isUrgent = originalValue;
+                        renderAll();
+                        showNotification(`Error saving urgent status: ${error.message}`, 'error');
+                    } finally {
+                        hideLoadingOverlay();
+                    }
+                }
+                return;
+            }
+
+            const groupRow = target.closest('.order-group-row');
+            if (groupRow && !target.closest('button, input, a')) {
+                const orderId = groupRow.dataset.orderId;
+                if (state.expandedOrders.has(orderId)) {
+                    state.expandedOrders.delete(orderId);
+                } else {
+                    state.expandedOrders.add(orderId);
+                }
+                renderAll();
+                saveState();
+                return;
+            }
+
+            const button = target.closest('button');
+            if (button) {
+                let partId = button.dataset.partId;
+                let orderId = button.dataset.orderId || (findPart(partId) ? state.orders.find(o => o.parts.some(p => p.id === partId))?.id : null);
+                let part = partId ? findPart(partId) : null;
+                let order = orderId ? state.orders.find(o => o.id === orderId) : null;
+
+                if (button.classList.contains('edit-order-btn')) {
+                    e.stopPropagation();
+                    openEditModal(orderId);
+                    return;
+                }
+
+                if (!part || !order) return;
+
+                if (button.classList.contains('delete-btn')) {
+                     openConfirmModal(
+                        'Delete Part', 
+                        `Are you sure you want to delete part "${part.id}"?`,
+                        async () => {
+                            const orderContainingPart = state.orders.find(o => o.parts.some(p => p.id === part.id));
+                            if (!orderContainingPart) return;
+                            
+                            showLoadingOverlay();
+                            try {
+                                const originalParts = [...orderContainingPart.parts];
+                                orderContainingPart.parts = orderContainingPart.parts.filter(p => p.id !== part.id);
+
+                                if (orderContainingPart.parts.length === 0) {
+                                    state.orders = state.orders.filter(o => o.id !== orderContainingPart.id);
+                                    await deleteOrderOnBackend(orderContainingPart.id);
+                                    showNotification(`Order ${orderContainingPart.id} deleted.`, 'success');
+                                } else {
+                                    await updateOrderOnBackend(orderContainingPart.id, orderContainingPart);
+                                    showNotification(`Part deleted.`, 'success');
+                                }
+                            } catch(error) {
+                                 showNotification(`Could not delete part: ${error.message}`, 'error');
+                                 // Restore state on error if needed
+                            } finally {
+                                renderAll();
+                                hideLoadingOverlay();
+                            }
+                        }
+                    );
+                    return;
+                }
+
+                if (button.classList.contains('toggle-status-btn')) {
+                    part.status = part.status === 'Completed' ? 'Scheduled' : 'Completed';
                     renderAll();
                     debouncedSave(part);
-                } else {
-                    renderAll();
+                    return;
                 }
-            };
-            input.addEventListener('blur', saveChange);
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') input.blur();
-                else if (e.key === 'Escape') renderAll();
-            });
-        }
-    });
 
-    orderListThead.addEventListener('click', (e) => {
+                if (button.classList.contains('material-status-btn')) {
+                    const currentIndex = MATERIAL_STATUS.indexOf(part.materialStatus);
+                    part.materialStatus = MATERIAL_STATUS[(currentIndex + 1) % MATERIAL_STATUS.length];
+                    renderAll();
+                    debouncedSave(part);
+                    return;
+                }
+            }
+
+            const durationCell = target.closest('.duration-cell');
+            if (durationCell && !durationCell.querySelector('input')) {
+                const partId = durationCell.dataset.partId;
+                const part = findPart(partId);
+                if (!part) return;
+
+                const originalValue = part.productionTimePerPiece;
+                durationCell.innerHTML = `<input type="number" class="w-16 text-center" value="${originalValue}" />`;
+                const input = durationCell.querySelector('input');
+                input.focus();
+                input.select();
+
+                const saveChange = () => {
+                    const newValue = parseInt(input.value);
+                    if (!isNaN(newValue) && newValue >= 0) {
+                        part.productionTimePerPiece = newValue;
+                        part.totalHours = (part.quantity * newValue) / 60;
+                        renderAll();
+                        debouncedSave(part);
+                    } else {
+                        renderAll();
+                    }
+                };
+                input.addEventListener('blur', saveChange);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') input.blur();
+                    else if (e.key === 'Escape') renderAll();
+                });
+            }
+        });
+    }
+
+    if(orderListThead) orderListThead.addEventListener('click', (e) => {
         const header = e.target.closest('.sortable-header');
         if (!header) return;
         const key = header.dataset.sortKey;
@@ -1030,48 +1027,39 @@ function setupEventListeners() {
         renderAll();
     });
 
-    searchKeySelect.addEventListener('change', (e) => {
+    if(searchKeySelect) searchKeySelect.addEventListener('change', (e) => {
         state.searchKey = e.target.value;
         renderAll();
     });
-    searchInput.addEventListener('keyup', (e) => {
+    if(searchInput) searchInput.addEventListener('keyup', (e) => {
         state.searchTerm = e.target.value;
         renderAll();
     });
 
-    clearDataLink.addEventListener('click', (e) => {
+    if(clearDataLink) clearDataLink.addEventListener('click', (e) => {
         e.preventDefault();
         actionsDropdownMenu.classList.add('hidden');
-        openConfirmModal(
-            'Alle Data Wissen',
-            'Weet je zeker dat je ALLE orders, klanten en machines wilt verwijderen? Dit kan niet ongedaan worden gemaakt.',
-            async () => {
-                showLoadingOverlay();
-                try {
-                    // We moeten nu alle drie de types data verwijderen
-                    // Dit vereist mogelijk een nieuwe API-endpoint of meerdere calls
-                    await replaceAllBackendData({ orders: [], klanten: [], machines: [] });
-                    state.orders = [];
-                    state.klanten = [];
-                    state.machines = [];
-                    renderAll();
-                    showNotification('Alle data is gewist.', 'success');
-                } catch(error) {
-                    showNotification(`Kon data niet wissen: ${error.message}`, 'error');
-                } finally {
-                    hideLoadingOverlay();
-                }
+        openConfirmModal('Clear All Data','Are you sure you want to delete ALL orders, customers, and machines? This cannot be undone.', async () => {
+            showLoadingOverlay();
+            try {
+                await replaceAllBackendData({ orders: [], customers: [], machines: [] });
+                state.orders = [];
+                state.customers = [];
+                state.machines = [];
+                renderAll();
+                showNotification('All data has been cleared.', 'success');
+            } catch(error) {
+                showNotification(`Could not clear data: ${error.message}`, 'error');
+            } finally {
+                hideLoadingOverlay();
             }
-        );
+        });
     });
 
-    exportDataLink.addEventListener('click', (e) => {
+    if(exportDataLink) exportDataLink.addEventListener('click', (e) => {
         e.preventDefault();
         const dataToExport = {
-            orders: state.orders,
-            klanten: state.klanten,
-            machines: state.machines,
-            expandedOrders: [...state.expandedOrders],
+            orders: state.orders, customers: state.customers, machines: state.machines, expandedOrders: [...state.expandedOrders],
         };
         const dataStr = JSON.stringify(dataToExport, null, 2);
         const dataBlob = new Blob([dataStr], { type: "application/json" });
@@ -1085,52 +1073,43 @@ function setupEventListeners() {
         document.body.removeChild(downloadLink);
         URL.revokeObjectURL(url);
         actionsDropdownMenu.classList.add('hidden');
-        showNotification('Export gestart!');
+        showNotification('Export started!');
     });
 
-    importDataLink.addEventListener('click', (e) => {
+    if(importDataLink) importDataLink.addEventListener('click', (e) => {
         e.preventDefault();
         importFileInput.click();
         actionsDropdownMenu.classList.add('hidden');
     });
 
-    importFileInput.addEventListener('change', (e) => {
+    if(importFileInput) importFileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
                 const importedData = JSON.parse(event.target.result);
-                if (!importedData.orders || !importedData.klanten || !importedData.machines) {
-                    throw new Error("Bestand heeft niet de juiste structuur.");
+                if (!importedData.orders || !importedData.customers || !importedData.machines) {
+                    throw new Error("File does not have the correct structure.");
                 }
-
-                openConfirmModal(
-                    'Data Importeren',
-                    'Weet je zeker dat je deze data wilt importeren? Alle huidige data wordt overschreven!',
-                    async () => {
-                        showLoadingOverlay();
-                        try {
-                            // Deze functie moet worden uitgebreid om ook klanten en machines te importeren
-                            await replaceAllBackendData(importedData);
-                            
-                            state.orders = importedData.orders || [];
-                            state.klanten = importedData.klanten || [];
-                            state.machines = importedData.machines || [];
-                            state.expandedOrders = new Set(importedData.expandedOrders || []);
-                            
-                            renderAll();
-                            showNotification('Data succesvol geïmporteerd!', 'success');
-                        } catch (error) {
-                            showNotification(`Fout bij importeren: ${error.message}`, 'error');
-                        } finally {
-                            hideLoadingOverlay();
-                        }
+                openConfirmModal('Import Data', 'Are you sure you want to import this data? All current data will be overwritten!', async () => {
+                    showLoadingOverlay();
+                    try {
+                        await replaceAllBackendData(importedData);
+                        state.orders = importedData.orders || [];
+                        state.customers = importedData.customers || [];
+                        state.machines = importedData.machines || [];
+                        state.expandedOrders = new Set(importedData.expandedOrders || []);
+                        renderAll();
+                        showNotification('Data imported successfully!', 'success');
+                    } catch (error) {
+                        showNotification(`Error importing data: ${error.message}`, 'error');
+                    } finally {
+                        hideLoadingOverlay();
                     }
-                );
-
+                });
             } catch (error) {
-                showNotification(`Fout bij importeren: ${error.message}`, 'error');
+                showNotification(`Error importing data: ${error.message}`, 'error');
             } finally {
                 e.target.value = null;
             }
@@ -1138,7 +1117,7 @@ function setupEventListeners() {
         reader.readAsText(file);
     });
 
-    prevWeekBtn.addEventListener('click', () => {
+    if(prevWeekBtn) prevWeekBtn.addEventListener('click', () => {
         const newStartDate = new Date(state.planningStartDate);
         newStartDate.setDate(newStartDate.getDate() - 7);
         state.planningStartDate = newStartDate;
@@ -1146,7 +1125,8 @@ function setupEventListeners() {
         renderAll();
         planningContainer.scrollLeft = 0;
     });
-    nextWeekBtn.addEventListener('click', () => {
+
+    if(nextWeekBtn) nextWeekBtn.addEventListener('click', () => {
         const newStartDate = new Date(state.planningStartDate);
         newStartDate.setDate(newStartDate.getDate() + 7);
         state.planningStartDate = newStartDate;
@@ -1154,7 +1134,8 @@ function setupEventListeners() {
         renderAll();
         planningContainer.scrollLeft = 0;
     });
-    todayBtn.addEventListener('click', () => {
+
+    if(todayBtn) todayBtn.addEventListener('click', () => {
         let today = new Date();
         today.setHours(0, 0, 0, 0);
         const dayOfWeek = today.getDay();
@@ -1164,10 +1145,10 @@ function setupEventListeners() {
         renderAll();
     });
 
-    fullscreenBtn.addEventListener('click', () => {
+    if(fullscreenBtn) fullscreenBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch(err => {
-                showNotification(`Kon volledig scherm niet activeren: ${err.message}`, 'error');
+                showNotification(`Could not activate fullscreen: ${err.message}`, 'error');
             });
         } else {
             if (document.exitFullscreen) {
@@ -1175,19 +1156,20 @@ function setupEventListeners() {
             }
         }
     });
+
     document.addEventListener('fullscreenchange', () => {
         if (document.fullscreenElement) {
-            fullscreenText.textContent = 'Verlaat Volledig Scherm';
+            fullscreenText.textContent = 'Exit Fullscreen';
             fullscreenIconEnter.classList.add('hidden');
             fullscreenIconExit.classList.remove('hidden');
         } else {
-            fullscreenText.textContent = 'Volledig Scherm';
+            fullscreenText.textContent = 'Fullscreen';
             fullscreenIconEnter.classList.remove('hidden');
             fullscreenIconExit.classList.add('hidden');
         }
     });
 
-    actionsDropdownBtn.addEventListener('click', (e) => {
+    if(actionsDropdownBtn) actionsDropdownBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         actionsDropdownMenu.classList.toggle('hidden');
     });
@@ -1198,31 +1180,25 @@ function setupEventListeners() {
         }
     });
 
-    newOrderHeader.addEventListener('click', () => {
-        state.isOrderFormCollapsed = !state.isOrderFormCollapsed;
-        applyUiState();
-        saveState();
-    });
-
-    showLoadBtn.addEventListener('click', () => {
+    if(showLoadBtn) showLoadBtn.addEventListener('click', () => {
         state.isLoadModalVisible = true;
         const machineLoadInfo = calculateMachineLoad(buildScheduleAndDetectConflicts(), state.planningStartDate);
         renderMachineLoad(machineLoadInfo);
     });
 
-    closeLoadModalBtn.addEventListener('click', () => {
+    if (closeLoadModalBtn) closeLoadModalBtn.addEventListener('click', () => {
         state.isLoadModalVisible = false;
         renderMachineLoad({});
     });
 
-    machineLoadModal.addEventListener('click', (e) => {
+    if (machineLoadModal) machineLoadModal.addEventListener('click', (e) => {
         if (e.target.id === 'machine-load-modal') {
             state.isLoadModalVisible = false;
             renderMachineLoad({});
         }
     });
 
-    prevLoadWeekBtn.addEventListener('click', () => {
+    if (prevLoadWeekBtn) prevLoadWeekBtn.addEventListener('click', () => {
         const machineLoadInfo = calculateMachineLoad(buildScheduleAndDetectConflicts(), state.planningStartDate);
         const availableWeeks = Object.keys(machineLoadInfo).sort((a, b) => a - b);
         const currentIndex = availableWeeks.indexOf(String(state.machineLoadWeek));
@@ -1232,7 +1208,7 @@ function setupEventListeners() {
         }
     });
 
-    nextLoadWeekBtn.addEventListener('click', () => {
+    if (nextLoadWeekBtn) nextLoadWeekBtn.addEventListener('click', () => {
         const machineLoadInfo = calculateMachineLoad(buildScheduleAndDetectConflicts(), state.planningStartDate);
         const availableWeeks = Object.keys(machineLoadInfo).sort((a, b) => a - b);
         const currentIndex = availableWeeks.indexOf(String(state.machineLoadWeek));
@@ -1242,58 +1218,58 @@ function setupEventListeners() {
         }
     });
 
-    manageCustomersBtn.addEventListener('click', (e) => {
+    if (manageCustomersBtn) manageCustomersBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         renderCustomerModalList();
         customerModal.classList.remove('hidden');
     });
 
-    manageMachinesBtn.addEventListener('click', (e) => {
+    if (manageMachinesBtn) manageMachinesBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         renderMachineModalList();
         machineModal.classList.remove('hidden');
     });
 
-    closeCustomerModalBtn.addEventListener('click', () => customerModal.classList.add('hidden'));
-    closeMachineModalBtn.addEventListener('click', () => machineModal.classList.add('hidden'));
+    if (closeCustomerModalBtn) closeCustomerModalBtn.addEventListener('click', () => customerModal.classList.add('hidden'));
+    if (closeMachineModalBtn) closeMachineModalBtn.addEventListener('click', () => machineModal.classList.add('hidden'));
 
-    customerModal.addEventListener('click', (e) => {
+    if (customerModal) customerModal.addEventListener('click', (e) => {
         if (e.target.id === 'customer-modal') customerModal.classList.add('hidden');
     });
-    machineModal.addEventListener('click', (e) => {
+    if (machineModal) machineModal.addEventListener('click', (e) => {
         if (e.target.id === 'machine-modal') machineModal.classList.add('hidden');
     });
 
-    addCustomerForm.addEventListener('submit', async (e) => {
+    if (addCustomerForm) addCustomerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const newName = newCustomerNameInput.value.trim();
-        if (newName && !state.klanten.find(k => k.toLowerCase() === newName.toLowerCase())) {
+        if (newName && !state.customers.find(c => c.toLowerCase() === newName.toLowerCase())) {
             showLoadingOverlay();
             try {
-                const response = await fetch(`${API_URL}/klanten`, {
+                const response = await fetch(`${API_URL}/customers`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ naam: newName })
+                    body: JSON.stringify({ name: newName })
                 });
-                if (!response.ok) throw new Error('Serverfout');
+                if (!response.ok) throw new Error('Server error');
                 
-                state.klanten.push(newName);
-                state.klanten.sort();
+                state.customers.push(newName);
+                state.customers.sort();
                 newCustomerNameInput.value = '';
                 renderCustomerModalList();
                 renderCustomerDropdown();
-                showNotification(`Klant "${newName}" toegevoegd!`, 'success');
+                showNotification(`Customer "${newName}" added!`, 'success');
             } catch (error) {
-                showNotification("Kon klant niet opslaan op server.", "error");
+                showNotification("Could not save customer to server.", "error");
             } finally {
                 hideLoadingOverlay();
             }
         } else {
-            showNotification("Klantnaam is leeg of bestaat al.", "error");
+            showNotification("Customer name is empty or already exists.", "error");
         }
     });
 
-    addMachineForm.addEventListener('submit', async (e) => {
+    if (addMachineForm) addMachineForm.addEventListener('submit', async (e) => {
 		e.preventDefault();
 		const newName = newMachineNameInput.value.trim();
 		if (newName && !state.machines.find(m => m.name.toLowerCase() === newName.toLowerCase())) {
@@ -1305,122 +1281,104 @@ function setupEventListeners() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(newMachine)
                 });
-                if (!response.ok) throw new Error('Serverfout');
+                if (!response.ok) throw new Error('Server error');
 
                 state.machines.push(newMachine);
                 newMachineNameInput.value = '';
                 newMachineHasRobotCheckbox.checked = false;
                 renderMachineModalList();
                 renderAll();
-                showNotification(`Machine "${newName}" toegevoegd!`, 'success');
+                showNotification(`Machine "${newName}" added!`, 'success');
             } catch (error) {
-                showNotification("Kon machine niet opslaan op server.", "error");
+                showNotification("Could not save machine to server.", "error");
             } finally {
                 hideLoadingOverlay();
             }
 		} else {
-			showNotification("Machinenaam is leeg of bestaat al.", "error");
+			showNotification("Machine name is empty or already exists.", "error");
 		}
 	});
 
-    customerListUl.addEventListener('click', (e) => {
+    if (customerListUl) customerListUl.addEventListener('click', (e) => {
         if (e.target.classList.contains('delete-customer-btn')) {
-            const klantToDelete = e.target.dataset.klant;
-            openConfirmModal(
-                'Klant Verwijderen',
-                `Weet je zeker dat je klant "${klantToDelete}" wilt verwijderen?`,
-                async () => {
-                    showLoadingOverlay();
-                    try {
-                        const encodedName = encodeURIComponent(klantToDelete);
-                        const response = await fetch(`${API_URL}/klanten/${encodedName}`, { method: 'DELETE' });
-                        if (!response.ok) throw new Error('Serverfout');
-
-                        state.klanten = state.klanten.filter(k => k !== klantToDelete);
-                        renderCustomerModalList();
-                        renderCustomerDropdown();
-                        showNotification(`Klant "${klantToDelete}" verwijderd.`, 'success');
-                    } catch (error) {
-                        showNotification("Kon klant niet verwijderen van server.", "error");
-                    } finally {
-                        hideLoadingOverlay();
-                    }
+            const customerToDelete = e.target.dataset.customer;
+            openConfirmModal('Delete Customer', `Are you sure you want to delete customer "${customerToDelete}"?`, async () => {
+                showLoadingOverlay();
+                try {
+                    const encodedName = encodeURIComponent(customerToDelete);
+                    const response = await fetch(`${API_URL}/customers/${encodedName}`, { method: 'DELETE' });
+                    if (!response.ok) throw new Error('Server error');
+                    state.customers = state.customers.filter(c => c !== customerToDelete);
+                    renderCustomerModalList();
+                    renderCustomerDropdown();
+                    showNotification(`Customer "${customerToDelete}" deleted.`, 'success');
+                } catch (error) {
+                    showNotification("Could not delete customer from server.", "error");
+                } finally {
+                    hideLoadingOverlay();
                 }
-            );
+            });
         }
     });
 
-    machineListUl.addEventListener('click', (e) => {
+    if (machineListUl) machineListUl.addEventListener('click', (e) => {
         if (e.target.classList.contains('delete-machine-btn')) {
             const machineToDelete = e.target.dataset.machineName;
-            openConfirmModal(
-                'Machine Verwijderen',
-                `Weet je zeker dat je machine "${machineToDelete}" wilt verwijderen?`,
-                async () => {
-                    showLoadingOverlay();
-                    try {
-                        const encodedName = encodeURIComponent(machineToDelete);
-                        const response = await fetch(`${API_URL}/machines/${encodedName}`, { method: 'DELETE' });
-                        if (!response.ok) throw new Error('Serverfout');
-
-                        state.machines = state.machines.filter(m => m.name !== machineToDelete);
-                        renderMachineModalList();
-                        renderAll();
-                        showNotification(`Machine "${machineToDelete}" verwijderd.`, 'success');
-                    } catch (error) {
-                        showNotification("Kon machine niet verwijderen van server.", "error");
-                    } finally {
-                        hideLoadingOverlay();
-                    }
+            openConfirmModal('Delete Machine', `Are you sure you want to delete machine "${machineToDelete}"?`, async () => {
+                showLoadingOverlay();
+                try {
+                    const encodedName = encodeURIComponent(machineToDelete);
+                    const response = await fetch(`${API_URL}/machines/${encodedName}`, { method: 'DELETE' });
+                    if (!response.ok) throw new Error('Server error');
+                    state.machines = state.machines.filter(m => m.name !== machineToDelete);
+                    renderMachineModalList();
+                    renderAll();
+                    showNotification(`Machine "${machineToDelete}" deleted.`, 'success');
+                } catch (error) {
+                    showNotification("Could not delete machine from server.", "error");
+                } finally {
+                    hideLoadingOverlay();
                 }
-            );
+            });
         }
     });
 
-    addPartToEditBtn.addEventListener('click', () => {
+    if (cancelEditBtn) cancelEditBtn.addEventListener('click', () => {
+        editOrderModal.classList.add('hidden');
+    });
+
+    if (addPartToEditBtn) addPartToEditBtn.addEventListener('click', () => {
         const orderId = editOrderForm.dataset.editingOrderId;
         if (!orderId) return;
 
         const partDiv = document.createElement('div');
-        // We markeren dit als een 'nieuw' onderdeel
         partDiv.className = 'edit-part-entry is-new grid grid-cols-1 md:grid-cols-4 gap-4 items-center border-l-4 border-green-400 p-2 rounded-md';
         partDiv.innerHTML = `
-            <div><label class="block text-xs font-medium text-gray-500">Naam</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="onderdeelNaam" placeholder="Nieuw onderdeel" required></div>
-            <div><label class="block text-xs font-medium text-gray-500">Tekening Nr.</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="tekeningNummer"></div>
-            <div><label class="block text-xs font-medium text-gray-500">Aantal</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="aantal" value="1" required></div>
-            <div><label class="block text-xs font-medium text-gray-500">Prod. (min/st)</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="productieTijdPerStuk" value="1" required></div>
+            <div><label class="block text-xs font-medium text-gray-500">Name</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="partName" placeholder="New part" required></div>
+            <div><label class="block text-xs font-medium text-gray-500">Drawing No.</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="drawingNumber"></div>
+            <div><label class="block text-xs font-medium text-gray-500">Quantity</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="quantity" value="1" required></div>
+            <div><label class="block text-xs font-medium text-gray-500">Prod. (min/pc)</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="productionTimePerPiece" value="1" required></div>
         `;
         editPartsContainer.appendChild(partDiv);
         partDiv.querySelector('input').focus();
     });
 
-    cancelEditBtn.addEventListener('click', () => {
-        editOrderModal.classList.add('hidden');
-    });
-
-    editOrderForm.addEventListener('submit', async (e) => {
+    if (editOrderForm) editOrderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-
         const originalOrderId = e.target.dataset.editingOrderId;
         const orderToUpdate = state.orders.find(o => o.id === originalOrderId);
-
         if (!orderToUpdate) {
-            showNotification("Kon de te bewerken order niet vinden.", "error");
+            showNotification("Could not find the order to edit.", "error");
             return;
         }
 
-        // Maak een diepe kopie om mee te werken
         const updatedOrderData = JSON.parse(JSON.stringify(orderToUpdate));
-
         const newOrderId = document.getElementById('edit-order-id').value;
         updatedOrderData.id = newOrderId;
-        updatedOrderData.klant = document.getElementById('edit-klant').value;
-        updatedOrderData.klantOrdernr = document.getElementById('edit-klant-ordernummer').value;
+        updatedOrderData.customer = document.getElementById('edit-customer').value;
+        updatedOrderData.customerOrderNr = document.getElementById('edit-customer-order-nr').value;
         updatedOrderData.deadline = document.getElementById('edit-deadline').value;
 
-        // --- START VAN AANGEPASTE LOGICA ---
-
-        // Vind het hoogste onderdeelnummer om conflicten te vermijden
         let maxPartNumber = 0;
         updatedOrderData.parts.forEach(p => {
             const num = parseInt(p.id.split('-').pop());
@@ -1430,43 +1388,35 @@ function setupEventListeners() {
         const partForms = editPartsContainer.querySelectorAll('.edit-part-entry');
         partForms.forEach(partForm => {
             const originalPartId = partForm.dataset.partId;
-
-            // Als het een bestaand onderdeel is, update het.
             if (originalPartId) {
                 const partToUpdate = updatedOrderData.parts.find(p => p.id === originalPartId);
                 if (partToUpdate) {
-                    const newAantal = parseInt(partForm.querySelector('[data-field="aantal"]').value);
-                    const newProdTijd = parseFloat(partForm.querySelector('[data-field="productieTijdPerStuk"]').value);
-
-                    partToUpdate.onderdeelNaam = partForm.querySelector('[data-field="onderdeelNaam"]').value;
-                    partToUpdate.tekeningNummer = partForm.querySelector('[data-field="tekeningNummer"]').value;
-                    partToUpdate.aantal = newAantal;
-                    partToUpdate.productieTijdPerStuk = newProdTijd;
-                    partToUpdate.totaalUren = (newAantal * newProdTijd) / 60;
-
-                    // Update part ID als order ID is veranderd
+                    const newQuantity = parseInt(partForm.querySelector('[data-field="quantity"]').value);
+                    const newProdTime = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value);
+                    partToUpdate.partName = partForm.querySelector('[data-field="partName"]').value;
+                    partToUpdate.drawingNumber = partForm.querySelector('[data-field="drawingNumber"]').value;
+                    partToUpdate.quantity = newQuantity;
+                    partToUpdate.productionTimePerPiece = newProdTime;
+                    partToUpdate.totalHours = (newQuantity * newProdTime) / 60;
                     if (originalOrderId !== newOrderId) {
                         const partIndex = originalPartId.split('-').pop();
                         partToUpdate.id = `${newOrderId}-${partIndex}`;
                     }
                 }
-            } 
-            // Als het een NIEUW onderdeel is, maak het aan en voeg toe.
-            else if (partForm.classList.contains('is-new')) {
-                maxPartNumber++; // Verhoog voor uniek ID
+            } else if (partForm.classList.contains('is-new')) {
+                maxPartNumber++;
                 const newPartId = `${newOrderId}-${maxPartNumber}`;
-                const newAantal = parseInt(partForm.querySelector('[data-field="aantal"]').value);
-                const newProdTijd = parseFloat(partForm.querySelector('[data-field="productieTijdPerStuk"]').value);
-
+                const newQuantity = parseInt(partForm.querySelector('[data-field="quantity"]').value);
+                const newProdTime = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value);
                 const newPart = {
                     id: newPartId,
-                    onderdeelNaam: partForm.querySelector('[data-field="onderdeelNaam"]').value,
-                    tekeningNummer: partForm.querySelector('[data-field="tekeningNummer"]').value,
-                    aantal: newAantal,
-                    productieTijdPerStuk: newProdTijd,
-                    totaalUren: (newAantal * newProdTijd) / 60,
-                    materiaalStatus: 'Niet Beschikbaar',
-                    status: 'Nog in te plannen',
+                    partName: partForm.querySelector('[data-field="partName"]').value,
+                    drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value,
+                    quantity: newQuantity,
+                    productionTimePerPiece: newProdTime,
+                    totalHours: (newQuantity * newProdTime) / 60,
+                    materialStatus: 'Not Available',
+                    status: 'To Be Planned',
                     machine: null,
                     startDate: null,
                     shift: 8,
@@ -1475,98 +1425,94 @@ function setupEventListeners() {
             }
         });
 
-        // --- EINDE AANGEPASTE LOGICA ---
-
         showLoadingOverlay();
         try {
             await updateOrderOnBackend(originalOrderId, updatedOrderData);
-
             const orderIndex = state.orders.findIndex(o => o.id === originalOrderId);
             if (orderIndex !== -1) {
                 state.orders[orderIndex] = updatedOrderData;
             }
-
             editOrderModal.classList.add('hidden');
             renderAll();
-            showNotification(`Order ${newOrderId} succesvol opgeslagen!`, 'success');
-
+            showNotification(`Order ${newOrderId} saved successfully!`, 'success');
         } catch (error) {
-            showNotification(`Kon wijzigingen niet opslaan: ${error.message}`, 'error');
+            showNotification(`Could not save changes: ${error.message}`, 'error');
         } finally {
             hideLoadingOverlay();
         }
     });
 
-    let lastDragOverCell = null;
-    planningContainer.addEventListener('dragstart', (e) => {
-        if (e.target.classList.contains('order-block')) {
-            e.dataTransfer.setData('text/plain', e.target.dataset.partId);
-            e.dataTransfer.effectAllowed = 'move';
-            setTimeout(() => e.target.classList.add('dragging'), 0);
-        }
-    });
-    planningContainer.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const targetCell = e.target.closest('.grid-cell');
-        if (targetCell) {
-            if (lastDragOverCell && lastDragOverCell !== targetCell) {
-                lastDragOverCell.classList.remove('drag-over');
+    if(planningContainer) {
+        planningContainer.addEventListener('dragstart', (e) => {
+            if (e.target.classList.contains('order-block')) {
+                e.dataTransfer.setData('text/plain', e.target.dataset.partId);
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => e.target.classList.add('dragging'), 0);
             }
-            targetCell.classList.add('drag-over');
-            lastDragOverCell = targetCell;
-        }
-    });
-    planningContainer.addEventListener('dragleave', (e) => {
-        if (lastDragOverCell) {
-            lastDragOverCell.classList.remove('drag-over');
-            lastDragOverCell = null;
-        }
-    });
-    planningContainer.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        if (lastDragOverCell) {
-            lastDragOverCell.classList.remove('drag-over');
-            lastDragOverCell = null;
-        }
-        const partId = e.dataTransfer.getData('text/plain');
-        const targetCell = e.target.closest('.grid-cell');
-        if (partId && targetCell) {
-            const part = findPart(partId);
-            const newDate = targetCell.dataset.date;
-            const newMachine = targetCell.dataset.machine;
-            if (part && newDate && newMachine) {
-                part.startDate = newDate;
-                part.machine = newMachine;
-                const machineInfo = state.machines.find(m => m.name === newMachine);
-                if (part.shift === 24 && !machineInfo.hasRobot) {
-                    part.shift = 8;
-                    showNotification("Shift is teruggezet naar Dag (8u) omdat de nieuwe machine geen robot heeft.", "error");
+        });
+        planningContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const targetCell = e.target.closest('.grid-cell');
+            if (targetCell) {
+                if (lastDragOverCell && lastDragOverCell !== targetCell) {
+                    lastDragOverCell.classList.remove('drag-over');
                 }
-                if (part.shift === 16 && !machineInfo.name.includes('DMU')) {
-                    part.shift = 8;
-                    showNotification("Shift is teruggezet naar Dag (8u) omdat de nieuwe machine geen DMU is.", "error");
-                }
-                renderAll();
-                const order = state.orders.find(o => o.parts.some(p => p.id === partId));
-                if (order) {
-                    showLoadingOverlay();
-                    try {
-                        await updateOrderOnBackend(order.id, order);
-                        showNotification(`Order ${order.id} verplaatst en opgeslagen!`, 'success');
-                    } catch (error) {
-                        showNotification(`Synchronisatiefout: ${error.message}`, 'error');
-                    } finally {
-                        hideLoadingOverlay();
+                targetCell.classList.add('drag-over');
+                lastDragOverCell = targetCell;
+            }
+        });
+        planningContainer.addEventListener('dragleave', (e) => {
+            if (lastDragOverCell) {
+                lastDragOverCell.classList.remove('drag-over');
+                lastDragOverCell = null;
+            }
+        });
+        planningContainer.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            if (lastDragOverCell) {
+                lastDragOverCell.classList.remove('drag-over');
+                lastDragOverCell = null;
+            }
+            const partId = e.dataTransfer.getData('text/plain');
+            const targetCell = e.target.closest('.grid-cell');
+            if (partId && targetCell) {
+                const part = findPart(partId);
+                const newDate = targetCell.dataset.date;
+                const newMachine = targetCell.dataset.machine;
+                if (part && newDate && newMachine) {
+                    part.startDate = newDate;
+                    part.machine = newMachine;
+                    const machineInfo = state.machines.find(m => m.name === newMachine);
+                    if (part.shift === 24 && !machineInfo.hasRobot) {
+                        part.shift = 8;
+                        showNotification("Shift was reset to Day (8h) because the new machine does not have a robot.", "error");
+                    }
+                    if (part.shift === 16 && !machineInfo.name.includes('DMU')) {
+                        part.shift = 8;
+                        showNotification("Shift was reset to Day (8h) because the new machine is not a DMU.", "error");
+                    }
+                    renderAll();
+                    const order = state.orders.find(o => o.parts.some(p => p.id === partId));
+                    if (order) {
+                        showLoadingOverlay();
+                        try {
+                            await updateOrderOnBackend(order.id, order);
+                            showNotification(`Order ${order.id} moved and saved!`, 'success');
+                        } catch (error) {
+                            showNotification(`Synchronization error: ${error.message}`, 'error');
+                        } finally {
+                            hideLoadingOverlay();
+                        }
                     }
                 }
             }
-        }
-    });
-    planningContainer.addEventListener('dragend', (e) => {
-        if (e.target.classList.contains('order-block')) {
-            e.target.classList.remove('dragging');
-        }
-    });
+        });
+        planningContainer.addEventListener('dragend', (e) => {
+            if (e.target.classList.contains('order-block')) {
+                e.target.classList.remove('dragging');
+            }
+        });
+    }
 }
 
 function findPart(partId) {
@@ -1580,26 +1526,32 @@ function findPart(partId) {
 function openEditModal(orderId) {
     const order = state.orders.find(o => o.id === orderId);
     if (!order) {
-        showNotification("Order niet gevonden.", "error");
+        showNotification("Order not found.", "error");
         return;
     }
-    editOrderForm.dataset.editingOrderId = orderId;
+    
+    const form = document.getElementById('edit-order-form');
+    const container = document.getElementById('edit-parts-container');
+    if (!form || !container) return;
+
+    form.dataset.editingOrderId = orderId;
     document.getElementById('edit-order-id').value = order.id;
-    document.getElementById('edit-klant').value = order.klant;
-    document.getElementById('edit-klant-ordernummer').value = order.klantOrdernr;
+    document.getElementById('edit-customer').value = order.customer;
+    document.getElementById('edit-customer-order-nr').value = order.customerOrderNr;
     document.getElementById('edit-deadline').value = order.deadline;
-    editPartsContainer.innerHTML = '';
+    
+    container.innerHTML = '';
     order.parts.forEach(part => {
         const partDiv = document.createElement('div');
         partDiv.className = 'edit-part-entry grid grid-cols-1 md:grid-cols-4 gap-4 items-center border p-2 rounded-md';
         partDiv.dataset.partId = part.id;
         partDiv.innerHTML = `
-            <div><label class="block text-xs font-medium text-gray-500">Naam</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="onderdeelNaam" value="${part.onderdeelNaam}" required></div>
-            <div><label class="block text-xs font-medium text-gray-500">Tekening Nr.</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="tekeningNummer" value="${part.tekeningNummer}"></div>
-            <div><label class="block text-xs font-medium text-gray-500">Aantal</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="aantal" value="${part.aantal}" required></div>
-            <div><label class="block text-xs font-medium text-gray-500">Prod. (min/st)</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="productieTijdPerStuk" value="${part.productieTijdPerStuk}" required></div>
+            <div><label class="block text-xs font-medium text-gray-500">Name</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="partName" value="${part.partName}" required></div>
+            <div><label class="block text-xs font-medium text-gray-500">Drawing No.</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="drawingNumber" value="${part.drawingNumber}"></div>
+            <div><label class="block text-xs font-medium text-gray-500">Quantity</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="quantity" value="${part.quantity}" required></div>
+            <div><label class="block text-xs font-medium text-gray-500">Prod. (min/pc)</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="productionTimePerPiece" value="${part.productionTimePerPiece}" required></div>
         `;
-        editPartsContainer.appendChild(partDiv);
+        container.appendChild(partDiv);
     });
     
     editOrderModal.classList.remove('hidden');
@@ -1641,27 +1593,39 @@ function calculateMachineLoad(scheduleInfo, gridStartDate) {
 }
 
 function renderMachineLoad(loadData) {
+    const modal = document.getElementById('machine-load-modal');
+    if (!modal) return;
+    
     if (state.isLoadModalVisible) {
-        machineLoadModal.classList.remove('hidden');
+        modal.classList.remove('hidden');
     } else {
-        machineLoadModal.classList.add('hidden');
+        modal.classList.add('hidden');
         return;
     }
+    
+    const content = document.getElementById('load-week-content');
+    const title = document.getElementById('load-week-title');
+    const prevBtn = document.getElementById('prev-load-week-btn');
+    const nextBtn = document.getElementById('next-load-week-btn');
+    
+    if(!content || !title || !prevBtn || !nextBtn) return;
+
     const currentWeek = state.machineLoadWeek;
     if (!currentWeek || !loadData[currentWeek]) {
-        loadWeekContent.innerHTML = '<p class="text-center text-gray-500 text-sm">Geen data om te tonen voor deze week.</p>';
-        loadWeekTitle.textContent = 'Machinebelasting';
-        prevLoadWeekBtn.disabled = true;
-        nextLoadWeekBtn.disabled = true;
+        content.innerHTML = '<p class="text-center text-gray-500 text-sm">No data to display for this week.</p>';
+        title.textContent = 'Machine Load';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
         return;
     }
-    loadWeekTitle.textContent = `Machinebelasting Week ${currentWeek}`;
-    loadWeekContent.innerHTML = '';
+    title.textContent = `Machine Load Week ${currentWeek}`;
+    content.innerHTML = '';
     
     const availableWeeks = Object.keys(loadData).filter(w => w !== 'NaN').sort((a,b) => a - b);
     const currentIndex = availableWeeks.indexOf(String(currentWeek));
-    prevLoadWeekBtn.disabled = currentIndex <= 0;
-    nextLoadWeekBtn.disabled = currentIndex >= availableWeeks.length - 1;
+    prevBtn.disabled = currentIndex <= 0;
+    nextBtn.disabled = currentIndex >= availableWeeks.length - 1;
+
     state.machines.sort((a,b) => a.name.localeCompare(b.name)).forEach(machine => {
         const data = loadData[currentWeek][machine.name];
         const scheduled = Math.round(data.scheduled);
@@ -1677,44 +1641,27 @@ function renderMachineLoad(loadData) {
         machineDiv.innerHTML = `
             <div class="flex justify-between items-center mb-1">
                 <span class="font-medium text-sm text-gray-800">${machine.name}</span>
-                <span class="text-xs font-semibold ${isOverbooked ? 'text-red-600' : 'text-gray-500'}">${scheduled}u / ${capacity}u</span>
+                <span class="text-xs font-semibold ${isOverbooked ? 'text-red-600' : 'text-gray-500'}">${scheduled}h / ${capacity}h</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
                 <div class="${barColor} h-4 rounded-full" style="width: ${displayPercentage}%"></div>
             </div>
-            <p class="text-right text-xs font-bold ${isOverbooked ? 'text-red-600' : 'text-gray-700'} mt-1">${Math.round(percentage)}%${isOverbooked ? ' (Overbelast!)' : ''}</p>
+            <p class="text-right text-xs font-bold ${isOverbooked ? 'text-red-600' : 'text-gray-700'} mt-1">${Math.round(percentage)}%${isOverbooked ? ' (Overloaded!)' : ''}</p>
         `;
-        loadWeekContent.appendChild(machineDiv);
+        content.appendChild(machineDiv);
     });
 }
 
-// --- MODAL LOGICA ---
+// --- MODAL LOGIC ---
 let onConfirmCallback = null;
 
-function openConfirmModal(title, text, onConfirm, confirmText = 'Ja, verwijder', confirmColor = 'red') {
-    deleteConfirmTitle.textContent = title;
-    deleteConfirmText.textContent = text;
+function openConfirmModal(title, text, onConfirm) {
+    const titleEl = document.getElementById('delete-confirm-title');
+    const textEl = document.getElementById('delete-confirm-text');
+    if (titleEl) titleEl.textContent = title;
+    if (textEl) textEl.textContent = text;
+    
     onConfirmCallback = onConfirm;
-
-    // Pas de tekst van de knop aan
-    confirmDeleteBtn.textContent = confirmText;
-
-    // Verwijder alle mogelijke kleur-classes
-    confirmDeleteBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-green-600', 'hover:bg-green-700', 'bg-blue-600', 'hover:bg-blue-700');
-
-    // Voeg de juiste nieuwe kleur-classes toe
-    switch (confirmColor) {
-        case 'green':
-            confirmDeleteBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-            break;
-        case 'blue':
-            confirmDeleteBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-            break;
-        default: // 'red' is de standaard
-            confirmDeleteBtn.classList.add('bg-red-600', 'hover:bg-red-700');
-            break;
-    }
-
     confirmDeleteModal.classList.remove('hidden');
 }
 
@@ -1723,18 +1670,18 @@ function closeConfirmModal() {
     onConfirmCallback = null;
 }
 
-// --- INITIALISATIE ---
+// --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
     initializeDOMElements();
     
-    confirmDeleteBtn.addEventListener('click', () => {
+    if(confirmDeleteBtn) confirmDeleteBtn.addEventListener('click', () => {
         if (typeof onConfirmCallback === 'function') {
             onConfirmCallback();
         }
         closeConfirmModal();
     });
-    cancelDeleteBtn.addEventListener('click', closeConfirmModal);
-    confirmDeleteModal.addEventListener('click', (e) => {
+    if(cancelDeleteBtn) cancelDeleteBtn.addEventListener('click', closeConfirmModal);
+    if(confirmDeleteModal) confirmDeleteModal.addEventListener('click', (e) => {
         if (e.target.id === 'confirm-delete-modal') {
             closeConfirmModal();
         }
@@ -1742,18 +1689,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     showLoadingOverlay();
     try {
-        const [ordersRes, klantenRes, machinesRes] = await Promise.all([
-            fetch(`${API_URL}/orders?archived=false`),
-            fetch(`${API_URL}/klanten`),
+        const [ordersRes, customersRes, machinesRes] = await Promise.all([
+            fetch(`${API_URL}/orders`),
+            fetch(`${API_URL}/customers`),
             fetch(`${API_URL}/machines`)
         ]);
 
-        if (!ordersRes.ok || !klantenRes.ok || !machinesRes.ok) {
-            throw new Error('Kon initiële data niet laden van de server.');
+        if (!ordersRes.ok || !customersRes.ok || !machinesRes.ok) {
+            throw new Error('Could not load initial data from the server.');
         }
 
         state.orders = await ordersRes.json();
-        state.klanten = await klantenRes.json();
+        state.customers = await customersRes.json();
         state.machines = await machinesRes.json();
         
         setupEventListeners();
@@ -1764,16 +1711,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.planningStartDate = new Date(today.setDate(diff));
         state.planningStartDate.setHours(0, 0, 0, 0);
         
-        const defaultDeadline = new Date();
-        defaultDeadline.setDate(defaultDeadline.getDate() + 14);
-        document.getElementById('deadline').value = defaultDeadline.toISOString().split('T')[0];
+        const deadlineInput = document.getElementById('deadline');
+        if (deadlineInput) {
+            const defaultDeadline = new Date();
+            defaultDeadline.setDate(defaultDeadline.getDate() + 14);
+            deadlineInput.value = defaultDeadline.toISOString().split('T')[0];
+        }
         
-        createNewPartForm();
+        // Removed createNewPartForm() from initial load
         renderAll();
         
     } catch (error) {
-        console.error("Fout bij ophalen van data:", error);
-        showNotification("Kon niet verbinden met de backend server.", "error");
+        console.error("Error fetching data:", error);
+        showNotification("Could not connect to the backend server.", "error");
     } finally {
         hideLoadingOverlay();
     }

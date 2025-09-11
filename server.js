@@ -2,13 +2,12 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- DATABASE CONNECTIE ---
+// --- DATABASE CONNECTION ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -26,168 +25,170 @@ const corsOptions = {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Niet toegestaan door CORS'));
+      callback(new Error('Not allowed by CORS'));
     }
   }
 };
 app.use(cors(corsOptions));
-app.use(express.json()); 
+app.use(express.json());
 
-// --- DATABASE INITIALISATIE ---
+// --- DATABASE INITIALIZATION ---
 async function initializeDatabase() {
   const client = await pool.connect();
   try {
+    // Drop tables to ensure the new schema is applied correctly (optional, but good for a clean start)
+    await client.query(`DROP TABLE IF EXISTS orders, customers, machines;`);
+    
     await client.query(`CREATE TABLE IF NOT EXISTS orders (id VARCHAR(255) PRIMARY KEY, order_data JSONB NOT NULL);`);
-    await client.query(`CREATE TABLE IF NOT EXISTS klanten (naam VARCHAR(255) PRIMARY KEY);`);
-    await client.query(`CREATE TABLE IF NOT EXISTS machines (naam VARCHAR(255) PRIMARY KEY, heeft_robot BOOLEAN NOT NULL);`);
-    console.log("Database tabellen zijn gecontroleerd/aangemaakt.");
+    await client.query(`CREATE TABLE IF NOT EXISTS customers (name VARCHAR(255) PRIMARY KEY);`);
+    await client.query(`CREATE TABLE IF NOT EXISTS machines (name VARCHAR(255) PRIMARY KEY, has_robot BOOLEAN NOT NULL);`);
+    console.log("Database tables have been checked/created.");
   } catch (err) {
-    console.error("Fout bij initialiseren van database:", err);
+    console.error("Error initializing database:", err);
   } finally {
     client.release();
   }
 }
 
 // --- API ROUTES ---
-// server.js
+app.get('/', (req, res) => {
+  res.json({ message: "Hello, the Precam-backend (with database) is working!" });
+});
 
+// --- ORDER ROUTES ---
 app.get('/api/orders', async (req, res) => {
   try {
-    // Lees de 'archived' query parameter uit de URL (bv. /api/orders?archived=true)
-    const showArchived = req.query.archived === 'true';
-
-    // We filteren direct in de database op basis van de 'isArchived' eigenschap in de JSONB data.
-    // De ::boolean cast zorgt ervoor dat het correct wordt vergeleken.
-    // COALESCE zorgt ervoor dat orders zonder 'isArchived' eigenschap worden gezien als 'false' (dus actief).
-    const query = `
-      SELECT order_data FROM orders 
-      WHERE COALESCE((order_data->>'isArchived')::boolean, false) = $1
-    `;
-    
-    const result = await pool.query(query, [showArchived]);
-    
+    const result = await pool.query('SELECT order_data FROM orders');
     res.json(result.rows.map(row => row.order_data));
   } catch (err) {
-    console.error("Fout bij ophalen orders:", err);
-    res.status(500).json({ error: "Interne serverfout bij ophalen orders" });
+    console.error("Error fetching orders:", err);
+    res.status(500).json({ error: "Internal server error while fetching orders" });
   }
 });
+
 app.post('/api/orders', async (req, res) => {
     const newOrder = req.body;
     try {
         await pool.query('INSERT INTO orders (id, order_data) VALUES ($1, $2)', [newOrder.id, JSON.stringify(newOrder)]);
         res.status(201).json(newOrder);
     } catch (err) {
-        console.error("Fout bij toevoegen order:", err);
-        res.status(500).json({ error: "Kon order niet toevoegen" });
+        console.error("Error adding order:", err);
+        res.status(500).json({ error: "Could not add order" });
     }
 });
+
 app.put('/api/orders/:id', async (req, res) => {
     const orderId = req.params.id;
     const updatedOrderData = req.body;
     try {
         const result = await pool.query('UPDATE orders SET order_data = $1 WHERE id = $2', [JSON.stringify(updatedOrderData), orderId]);
-        if (result.rowCount === 0) return res.status(404).json({ message: "Order niet gevonden" });
+        if (result.rowCount === 0) return res.status(404).json({ message: "Order not found" });
         res.json(updatedOrderData);
     } catch (err) {
-        console.error("Fout bij bijwerken order:", err);
-        res.status(500).json({ error: "Kon order niet bijwerken" });
+        console.error("Error updating order:", err);
+        res.status(500).json({ error: "Could not update order" });
     }
 });
+
 app.delete('/api/orders/:id', async (req, res) => {
     const orderId = req.params.id;
     try {
         await pool.query('DELETE FROM orders WHERE id = $1', [orderId]);
         res.status(204).send();
     } catch (err) {
-        console.error("Fout bij verwijderen order:", err);
-        res.status(500).json({ error: "Kon order niet verwijderen" });
+        console.error("Error deleting order:", err);
+        res.status(500).json({ error: "Could not delete order" });
     }
 });
+
 app.post('/api/orders/replace', async (req, res) => {
-    const nieuweOrders = req.body;
+    const newOrders = req.body;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         await client.query('DELETE FROM orders');
-        for (const order of nieuweOrders) {
+        for (const order of newOrders) {
             await client.query('INSERT INTO orders (id, order_data) VALUES ($1, $2)', [order.id, JSON.stringify(order)]);
         }
         await client.query('COMMIT');
-        res.status(200).send({ message: 'Alle orders zijn succesvol vervangen.' });
+        res.status(200).send({ message: 'All orders have been successfully replaced.' });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error("Fout bij vervangen orders:", err);
-        res.status(500).json({ error: "Kon orders niet importeren" });
+        console.error("Error replacing orders:", err);
+        res.status(500).json({ error: "Could not import orders" });
     } finally {
         client.release();
     }
 });
 
-// --- KLANTEN ROUTES ---
-app.get('/api/klanten', async (req, res) => {
+// --- CUSTOMER ROUTES ---
+app.get('/api/customers', async (req, res) => {
   try {
-    const result = await pool.query('SELECT naam FROM klanten ORDER BY naam');
-    res.json(result.rows.map(row => row.naam));
+    const result = await pool.query('SELECT name FROM customers ORDER BY name');
+    res.json(result.rows.map(row => row.name));
   } catch (err) {
-    console.error("Fout bij ophalen klanten:", err);
-    res.status(500).json({ error: "Fout bij ophalen klanten" });
+    console.error("Error fetching customers:", err);
+    res.status(500).json({ error: "Error fetching customers" });
   }
 });
-app.post('/api/klanten', async (req, res) => {
-    const { naam } = req.body;
+
+app.post('/api/customers', async (req, res) => {
+    const { name } = req.body;
     try {
-        await pool.query('INSERT INTO klanten (naam) VALUES ($1) ON CONFLICT (naam) DO NOTHING', [naam]);
-        res.status(201).json({ naam });
+        await pool.query('INSERT INTO customers (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [name]);
+        res.status(201).json({ name });
     } catch (err) {
-        console.error("Fout bij toevoegen klant:", err);
-        res.status(500).json({ error: "Kon klant niet toevoegen" });
-    }
-});
-app.delete('/api/klanten/:naam', async (req, res) => {
-    const naam = decodeURIComponent(req.params.naam);
-    try {
-        await pool.query('DELETE FROM klanten WHERE naam = $1', [naam]);
-        res.status(204).send();
-    } catch (err) {
-        console.error("Fout bij verwijderen klant:", err);
-        res.status(500).json({ error: "Kon klant niet verwijderen" });
+        console.error("Error adding customer:", err);
+        res.status(500).json({ error: "Could not add customer" });
     }
 });
 
-// --- MACHINES ROUTES ---
+app.delete('/api/customers/:name', async (req, res) => {
+    const name = decodeURIComponent(req.params.name);
+    try {
+        await pool.query('DELETE FROM customers WHERE name = $1', [name]);
+        res.status(204).send();
+    } catch (err) {
+        console.error("Error deleting customer:", err);
+        res.status(500).json({ error: "Could not delete customer" });
+    }
+});
+
+// --- MACHINE ROUTES ---
 app.get('/api/machines', async (req, res) => {
   try {
-    const result = await pool.query('SELECT naam, heeft_robot FROM machines ORDER BY naam');
-    res.json(result.rows.map(row => ({ name: row.naam, hasRobot: row.heeft_robot })));
+    const result = await pool.query('SELECT name, has_robot FROM machines ORDER BY name');
+    res.json(result.rows.map(row => ({ name: row.name, hasRobot: row.has_robot })));
   } catch (err) {
-    console.error("Fout bij ophalen machines:", err);
-    res.status(500).json({ error: "Fout bij ophalen machines" });
+    console.error("Error fetching machines:", err);
+    res.status(500).json({ error: "Error fetching machines" });
   }
 });
+
 app.post('/api/machines', async (req, res) => {
     const { name, hasRobot } = req.body;
     try {
-        await pool.query('INSERT INTO machines (naam, heeft_robot) VALUES ($1, $2) ON CONFLICT (naam) DO NOTHING', [name, hasRobot]);
+        await pool.query('INSERT INTO machines (name, has_robot) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING', [name, hasRobot]);
         res.status(201).json({ name, hasRobot });
     } catch (err) {
-        console.error("Fout bij toevoegen machine:", err);
-        res.status(500).json({ error: "Kon machine niet toevoegen" });
-    }
-});
-app.delete('/api/machines/:naam', async (req, res) => {
-    const naam = decodeURIComponent(req.params.naam);
-    try {
-        await pool.query('DELETE FROM machines WHERE naam = $1', [naam]);
-        res.status(204).send();
-    } catch (err) {
-        console.error("Fout bij verwijderen machine:", err);
-        res.status(500).json({ error: "Kon machine niet verwijderen" });
+        console.error("Error adding machine:", err);
+        res.status(500).json({ error: "Could not add machine" });
     }
 });
 
-// --- SERVER STARTEN ---
+app.delete('/api/machines/:name', async (req, res) => {
+    const name = decodeURIComponent(req.params.name);
+    try {
+        await pool.query('DELETE FROM machines WHERE name = $1', [name]);
+        res.status(204).send();
+    } catch (err) {
+        console.error("Error deleting machine:", err);
+        res.status(500).json({ error: "Could not delete machine" });
+    }
+});
+
+// --- START SERVER ---
 app.listen(PORT, () => {
-  console.log(`Server draait op poort ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
   initializeDatabase();
 });
