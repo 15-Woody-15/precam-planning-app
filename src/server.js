@@ -31,13 +31,14 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../public')));
 
 // --- DATABASE INITIALIZATION ---
 async function initializeDatabase() {
   const client = await pool.connect();
   try {
-    // Drop tables to ensure the new schema is applied correctly (optional, but good for a clean start)
-    await client.query(`DROP TABLE IF EXISTS orders, customers, machines;`);
+    // De 'DROP TABLE' regel is hier definitief verwijderd.
     
     await client.query(`CREATE TABLE IF NOT EXISTS orders (id VARCHAR(255) PRIMARY KEY, order_data JSONB NOT NULL);`);
     await client.query(`CREATE TABLE IF NOT EXISTS customers (name VARCHAR(255) PRIMARY KEY);`);
@@ -184,6 +185,50 @@ app.delete('/api/machines/:name', async (req, res) => {
     } catch (err) {
         console.error("Error deleting machine:", err);
         res.status(500).json({ error: "Could not delete machine" });
+    }
+});
+
+// Route to replace all customers
+app.post('/api/customers/replace', async (req, res) => {
+    const newCustomers = req.body; // Expects an array of strings
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM customers');
+        for (const name of newCustomers) {
+            await client.query('INSERT INTO customers (name) VALUES ($1)', [name]);
+        }
+        await client.query('COMMIT');
+        res.status(200).send({ message: 'All customers have been successfully replaced.' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Error replacing customers:", err);
+        res.status(500).json({ error: "Could not import customers" });
+    } finally {
+        client.release();
+    }
+});
+
+// Route to replace all machines
+app.post('/api/machines/replace', async (req, res) => {
+    const newMachines = req.body; // Expects an array of objects
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM machines');
+        for (const machine of newMachines) {
+            const name = machine.name;
+            const hasRobot = machine.hasRobot ?? false; // Als machine.hasRobot leeg is, gebruik 'false' als standaardwaarde
+            await client.query('INSERT INTO machines (name, has_robot) VALUES ($1, $2)', [name, hasRobot]);
+        }
+        await client.query('COMMIT');
+        res.status(200).send({ message: 'All machines have been successfully replaced.' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Error replacing machines:", err);
+        res.status(500).json({ error: "Could not import machines" });
+    } finally {
+        client.release();
     }
 });
 

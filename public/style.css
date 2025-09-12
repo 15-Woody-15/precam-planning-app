@@ -383,3 +383,63 @@ body {
     color: #065f46; /* Donkergroene tekst */
     background-color: #d1fae5; /* Lichte groene achtergrond */
 }
+
+/* --- Stijlen voor de Theme Toggle Slider --- */
+
+/* De container van de switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+    /* Zorgt voor verticale uitlijning naast andere knoppen */
+    vertical-align: middle; 
+}
+
+/* Verberg de standaard HTML checkbox */
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* De achtergrond van de slider (het "spoor") */
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+
+    /* NIEUW: Ruimte voor de iconen */
+    padding: 0 8px; /* Ruimte aan de zijkanten van de iconen */
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Spreidt de iconen */
+}
+
+/* Het bolletje/schuifje zelf */
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%; /* Maakt het een cirkel */
+}
+
+/* Veranderingen wanneer de checkbox is aangevinkt (Dark mode AAN) */
+input:checked + .slider {
+    background-color: #3b82f6; /* Blauwe kleur als hij "aan" staat */
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px); /* Verplaats het bolletje naar rechts */
+}

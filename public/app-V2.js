@@ -124,7 +124,6 @@ const formatDateToYMD = (date) => {
     const day = d.getDate().toString().padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
-
 const getWeekNumber = (d) => {
     d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -156,7 +155,7 @@ function debounce(func, timeout = 750){
 }
 
 // --- API FUNCTIONS ---
-const API_URL = 'https://precam-planning-api-app.onrender.com/api';
+const API_URL = 'http://localhost:3000/api';
 
 async function replaceAllBackendData(data) {
     const response = await fetch(`${API_URL}/orders/replace`, {
@@ -440,6 +439,10 @@ function buildScheduleAndDetectConflicts() {
         .sort((a,b) => new Date(a.startDate) - new Date(b.startDate) || (b.isUrgent - a.isUrgent));
 
     partsToSchedule.forEach(part => {
+        if (!schedule[part.machine]) {
+            console.error(`Error: Machine "${part.machine}" found in an order part, but not in the machine list. Skipping this part.`);
+            return;
+        }
         let remainingHours = getPartDuration(part);
         let currentDate = new Date(part.startDate + 'T00:00:00');
         let actualStartDate = null;
@@ -736,16 +739,15 @@ function createNewPartForm() {
 // --- EVENT HANDLERS ---
 function setupEventListeners() {
     // --- THEME TOGGLE LOGIC ---
-    if (themeToggleBtn) {
+    const themeToggleCheckbox = document.getElementById('theme-toggle-checkbox');
+    if (themeToggleCheckbox) {
         const applyTheme = (theme) => {
             if (theme === 'dark') {
                 document.documentElement.classList.add('dark');
-                if(themeToggleLightIcon) themeToggleLightIcon.classList.remove('hidden');
-                if(themeToggleDarkIcon) themeToggleDarkIcon.classList.add('hidden');
+                themeToggleCheckbox.checked = true;
             } else {
                 document.documentElement.classList.remove('dark');
-                if(themeToggleDarkIcon) themeToggleDarkIcon.classList.remove('hidden');
-                if(themeToggleLightIcon) themeToggleLightIcon.classList.add('hidden');
+                themeToggleCheckbox.checked = false;
             }
         };
         const savedTheme = localStorage.getItem('theme');
@@ -757,15 +759,10 @@ function setupEventListeners() {
         } else {
             applyTheme('light');
         }
-        themeToggleBtn.addEventListener('click', () => {
-            const isDark = document.documentElement.classList.contains('dark');
-            if (isDark) {
-                localStorage.setItem('theme', 'light');
-                applyTheme('light');
-            } else {
-                localStorage.setItem('theme', 'dark');
-                applyTheme('dark');
-            }
+        themeToggleCheckbox.addEventListener('change', () => {
+            const newTheme = themeToggleCheckbox.checked ? 'dark' : 'light';
+            localStorage.setItem('theme', newTheme);
+            applyTheme(newTheme);
         });
     }
 
@@ -773,21 +770,14 @@ function setupEventListeners() {
     if(showNewOrderModalBtn) showNewOrderModalBtn.addEventListener('click', () => {
         addOrderForm.reset();
         partsContainer.innerHTML = '';
-        createNewPartForm(); // Start with one fresh part form
+        createNewPartForm();
         newOrderModal.classList.remove('hidden');
         document.getElementById('order-id').focus();
     });
-
-    if(closeNewOrderModalBtn) closeNewOrderModalBtn.addEventListener('click', () => {
-        newOrderModal.classList.add('hidden');
-    });
-
+    if(closeNewOrderModalBtn) closeNewOrderModalBtn.addEventListener('click', () => newOrderModal.classList.add('hidden'));
     if(newOrderModal) newOrderModal.addEventListener('click', (e) => {
-        if (e.target.id === 'new-order-modal') {
-            newOrderModal.classList.add('hidden');
-        }
+        if (e.target.id === 'new-order-modal') newOrderModal.classList.add('hidden');
     });
-
     if(addOrderForm) addOrderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const mainOrderId = document.getElementById('order-id').value;
@@ -796,12 +786,7 @@ function setupEventListeners() {
             return;
         }
         const newOrder = {
-            id: mainOrderId,
-            customer: document.getElementById('customer').value,
-            customerOrderNr: document.getElementById('customer-order-nr').value,
-            deadline: document.getElementById('deadline').value,
-            isUrgent: document.getElementById('is-urgent').checked,
-            parts: []
+            id: mainOrderId, customer: document.getElementById('customer').value, customerOrderNr: document.getElementById('customer-order-nr').value, deadline: document.getElementById('deadline').value, isUrgent: document.getElementById('is-urgent').checked, parts: []
         };
         const partForms = partsContainer.querySelectorAll('.part-entry');
         partForms.forEach((partForm, index) => {
@@ -809,17 +794,7 @@ function setupEventListeners() {
             const productionTimeInMinutes = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value);
             const quantity = parseInt(partForm.querySelector('[data-field="quantity"]').value);
             const newPart = {
-                id: partId,
-                partName: partForm.querySelector('[data-field="partName"]').value,
-                drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value,
-                quantity: quantity,
-                productionTimePerPiece: productionTimeInMinutes,
-                materialStatus: partForm.querySelector('[data-field="materialInStock"]').checked ? 'Available' : 'Not Available',
-                status: 'To Be Planned',
-                machine: null,
-                startDate: null,
-                shift: 8,
-                totalHours: (quantity * productionTimeInMinutes) / 60,
+                id: partId, partName: partForm.querySelector('[data-field="partName"]').value, drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value, quantity: quantity, productionTimePerPiece: productionTimeInMinutes, materialStatus: partForm.querySelector('[data-field="materialInStock"]').checked ? 'Available' : 'Not Available', status: 'To Be Planned', machine: null, startDate: null, shift: 8, totalHours: (quantity * productionTimeInMinutes) / 60,
             };
             newOrder.parts.push(newPart);
         });
@@ -827,12 +802,11 @@ function setupEventListeners() {
             showNotification("Please add at least one part to the order.", "error");
             return;
         }
-        
         showLoadingOverlay();
         try {
             await addOrderOnBackend(newOrder);
             state.orders.push(newOrder);
-            newOrderModal.classList.add('hidden'); // Close modal on success
+            newOrderModal.classList.add('hidden');
             renderAll();
             showNotification(`Order ${newOrder.id} saved successfully!`, 'success');
         } catch (error) {
@@ -842,7 +816,6 @@ function setupEventListeners() {
             hideLoadingOverlay();
         }
     });
-
     if(addPartBtn) addPartBtn.addEventListener('click', createNewPartForm);
 
     const debouncedSave = debounce(async (part) => {
@@ -862,32 +835,22 @@ function setupEventListeners() {
             const target = e.target;
             const partId = target.dataset.partId;
             if (!partId) return;
-
             const part = findPart(partId);
             if (!part) return;
-
-            if (target.classList.contains('machine-select')) {
-                part.machine = target.value;
-            } else if (target.classList.contains('shift-select')) {
-                part.shift = parseInt(target.value);
-            } else if (target.classList.contains('start-date-input')) {
-                part.startDate = target.value;
-            }
+            if (target.classList.contains('machine-select')) part.machine = target.value;
+            else if (target.classList.contains('shift-select')) part.shift = parseInt(target.value);
+            else if (target.classList.contains('start-date-input')) part.startDate = target.value;
             part.status = (part.machine && part.startDate) ? 'Scheduled' : 'To Be Planned';
-
             renderAll();
             debouncedSave(part);
         });
-
         orderListBody.addEventListener('click', async (e) => {
             const target = e.target;
-
             if (target.classList.contains('toggle-urgent-btn')) {
                 e.stopPropagation();
                 const orderId = target.dataset.orderId;
                 const order = state.orders.find(o => o.id === orderId);
                 if (order) {
-                    const originalValue = order.isUrgent;
                     order.isUrgent = target.checked;
                     renderAll();
                     showLoadingOverlay();
@@ -895,8 +858,6 @@ function setupEventListeners() {
                         await updateOrderOnBackend(order.id, order);
                         showNotification(`Urgent status for order ${order.id} saved!`, 'success');
                     } catch (error) {
-                        order.isUrgent = originalValue;
-                        renderAll();
                         showNotification(`Error saving urgent status: ${error.message}`, 'error');
                     } finally {
                         hideLoadingOverlay();
@@ -904,75 +865,56 @@ function setupEventListeners() {
                 }
                 return;
             }
-
             const groupRow = target.closest('.order-group-row');
             if (groupRow && !target.closest('button, input, a')) {
                 const orderId = groupRow.dataset.orderId;
-                if (state.expandedOrders.has(orderId)) {
-                    state.expandedOrders.delete(orderId);
-                } else {
-                    state.expandedOrders.add(orderId);
-                }
+                if (state.expandedOrders.has(orderId)) state.expandedOrders.delete(orderId);
+                else state.expandedOrders.add(orderId);
                 renderAll();
                 saveState();
                 return;
             }
-
             const button = target.closest('button');
             if (button) {
                 let partId = button.dataset.partId;
                 let orderId = button.dataset.orderId || (findPart(partId) ? state.orders.find(o => o.parts.some(p => p.id === partId))?.id : null);
                 let part = partId ? findPart(partId) : null;
-                let order = orderId ? state.orders.find(o => o.id === orderId) : null;
-
                 if (button.classList.contains('edit-order-btn')) {
                     e.stopPropagation();
                     openEditModal(orderId);
                     return;
                 }
-
-                if (!part || !order) return;
-
+                if (!part) return;
                 if (button.classList.contains('delete-btn')) {
-                     openConfirmModal(
-                        'Delete Part', 
-                        `Are you sure you want to delete part "${part.id}"?`,
-                        async () => {
-                            const orderContainingPart = state.orders.find(o => o.parts.some(p => p.id === part.id));
-                            if (!orderContainingPart) return;
-                            
-                            showLoadingOverlay();
-                            try {
-                                const originalParts = [...orderContainingPart.parts];
-                                orderContainingPart.parts = orderContainingPart.parts.filter(p => p.id !== part.id);
-
-                                if (orderContainingPart.parts.length === 0) {
-                                    state.orders = state.orders.filter(o => o.id !== orderContainingPart.id);
-                                    await deleteOrderOnBackend(orderContainingPart.id);
-                                    showNotification(`Order ${orderContainingPart.id} deleted.`, 'success');
-                                } else {
-                                    await updateOrderOnBackend(orderContainingPart.id, orderContainingPart);
-                                    showNotification(`Part deleted.`, 'success');
-                                }
-                            } catch(error) {
-                                 showNotification(`Could not delete part: ${error.message}`, 'error');
-                                 // Restore state on error if needed
-                            } finally {
-                                renderAll();
-                                hideLoadingOverlay();
+                     openConfirmModal('Delete Part', `Are you sure you want to delete part "${part.id}"?`, async () => {
+                        const orderContainingPart = state.orders.find(o => o.parts.some(p => p.id === part.id));
+                        if (!orderContainingPart) return;
+                        showLoadingOverlay();
+                        try {
+                            orderContainingPart.parts = orderContainingPart.parts.filter(p => p.id !== part.id);
+                            if (orderContainingPart.parts.length === 0) {
+                                state.orders = state.orders.filter(o => o.id !== orderContainingPart.id);
+                                await deleteOrderOnBackend(orderContainingPart.id);
+                                showNotification(`Order ${orderContainingPart.id} deleted.`, 'success');
+                            } else {
+                                await updateOrderOnBackend(orderContainingPart.id, orderContainingPart);
+                                showNotification(`Part deleted.`, 'success');
                             }
+                        } catch(error) {
+                             showNotification(`Could not delete part: ${error.message}`, 'error');
+                        } finally {
+                            renderAll();
+                            hideLoadingOverlay();
                         }
-                    );
+                    });
                     return;
                 }
-
                 if (button.classList.contains('toggle-status-btn')) {
                     part.status = part.status === 'Completed' ? 'Scheduled' : 'Completed';
                     renderAll();
                     debouncedSave(part);
                     return;
                 }
-
                 if (button.classList.contains('material-status-btn')) {
                     const currentIndex = MATERIAL_STATUS.indexOf(part.materialStatus);
                     part.materialStatus = MATERIAL_STATUS[(currentIndex + 1) % MATERIAL_STATUS.length];
@@ -981,19 +923,16 @@ function setupEventListeners() {
                     return;
                 }
             }
-
             const durationCell = target.closest('.duration-cell');
             if (durationCell && !durationCell.querySelector('input')) {
                 const partId = durationCell.dataset.partId;
                 const part = findPart(partId);
                 if (!part) return;
-
                 const originalValue = part.productionTimePerPiece;
                 durationCell.innerHTML = `<input type="number" class="w-16 text-center" value="${originalValue}" />`;
                 const input = durationCell.querySelector('input');
                 input.focus();
                 input.select();
-
                 const saveChange = () => {
                     const newValue = parseInt(input.value);
                     if (!isNaN(newValue) && newValue >= 0) {
@@ -1042,10 +981,12 @@ function setupEventListeners() {
         openConfirmModal('Clear All Data','Are you sure you want to delete ALL orders, customers, and machines? This cannot be undone.', async () => {
             showLoadingOverlay();
             try {
-                await replaceAllBackendData({ orders: [], customers: [], machines: [] });
-                state.orders = [];
-                state.customers = [];
-                state.machines = [];
+                await Promise.all([
+                    fetch(`${API_URL}/orders/replace`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([]) }),
+                    fetch(`${API_URL}/customers/replace`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([]) }),
+                    fetch(`${API_URL}/machines/replace`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([]) })
+                ]);
+                state.orders = []; state.customers = []; state.machines = [];
                 renderAll();
                 showNotification('All data has been cleared.', 'success');
             } catch(error) {
@@ -1058,6 +999,7 @@ function setupEventListeners() {
 
     if(exportDataLink) exportDataLink.addEventListener('click', (e) => {
         e.preventDefault();
+        actionsDropdownMenu.classList.add('hidden');
         const dataToExport = {
             orders: state.orders, customers: state.customers, machines: state.machines, expandedOrders: [...state.expandedOrders],
         };
@@ -1072,14 +1014,14 @@ function setupEventListeners() {
         downloadLink.click();
         document.body.removeChild(downloadLink);
         URL.revokeObjectURL(url);
-        actionsDropdownMenu.classList.add('hidden');
         showNotification('Export started!');
     });
 
+    // --- HET ONTBREKENDE BLOK VOOR IMPORT ---
     if(importDataLink) importDataLink.addEventListener('click', (e) => {
         e.preventDefault();
-        importFileInput.click();
         actionsDropdownMenu.classList.add('hidden');
+        importFileInput.click();
     });
 
     if(importFileInput) importFileInput.addEventListener('change', (e) => {
@@ -1095,10 +1037,17 @@ function setupEventListeners() {
                 openConfirmModal('Import Data', 'Are you sure you want to import this data? All current data will be overwritten!', async () => {
                     showLoadingOverlay();
                     try {
-                        await replaceAllBackendData(importedData);
+                        const correctedMachines = importedData.machines.map(m => ({
+                            name: m.name, hasRobot: m.has_robot ?? m.hasRobot ?? false
+                        }));
+                        await Promise.all([
+                            fetch(`${API_URL}/orders/replace`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(importedData.orders) }),
+                            fetch(`${API_URL}/customers/replace`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(importedData.customers) }),
+                            fetch(`${API_URL}/machines/replace`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(correctedMachines) })
+                        ]);
                         state.orders = importedData.orders || [];
                         state.customers = importedData.customers || [];
-                        state.machines = importedData.machines || [];
+                        state.machines = correctedMachines || [];
                         state.expandedOrders = new Set(importedData.expandedOrders || []);
                         renderAll();
                         showNotification('Data imported successfully!', 'success');
@@ -1107,7 +1056,7 @@ function setupEventListeners() {
                     } finally {
                         hideLoadingOverlay();
                     }
-                });
+                }, 'Yes, import');
             } catch (error) {
                 showNotification(`Error importing data: ${error.message}`, 'error');
             } finally {
@@ -1158,14 +1107,16 @@ function setupEventListeners() {
     });
 
     document.addEventListener('fullscreenchange', () => {
-        if (document.fullscreenElement) {
-            fullscreenText.textContent = 'Exit Fullscreen';
-            fullscreenIconEnter.classList.add('hidden');
-            fullscreenIconExit.classList.remove('hidden');
-        } else {
-            fullscreenText.textContent = 'Fullscreen';
-            fullscreenIconEnter.classList.remove('hidden');
-            fullscreenIconExit.classList.add('hidden');
+        if (fullscreenText && fullscreenIconEnter && fullscreenIconExit) {
+            if (document.fullscreenElement) {
+                fullscreenText.textContent = 'Exit Fullscreen';
+                fullscreenIconEnter.classList.add('hidden');
+                fullscreenIconExit.classList.remove('hidden');
+            } else {
+                fullscreenText.textContent = 'Fullscreen';
+                fullscreenIconEnter.classList.remove('hidden');
+                fullscreenIconExit.classList.add('hidden');
+            }
         }
     });
 
@@ -1222,12 +1173,14 @@ function setupEventListeners() {
         e.stopPropagation();
         renderCustomerModalList();
         customerModal.classList.remove('hidden');
+        actionsDropdownMenu.classList.add('hidden');
     });
 
     if (manageMachinesBtn) manageMachinesBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         renderMachineModalList();
         machineModal.classList.remove('hidden');
+        actionsDropdownMenu.classList.add('hidden');
     });
 
     if (closeCustomerModalBtn) closeCustomerModalBtn.addEventListener('click', () => customerModal.classList.add('hidden'));
@@ -1252,7 +1205,6 @@ function setupEventListeners() {
                     body: JSON.stringify({ name: newName })
                 });
                 if (!response.ok) throw new Error('Server error');
-                
                 state.customers.push(newName);
                 state.customers.sort();
                 newCustomerNameInput.value = '';
@@ -1282,7 +1234,6 @@ function setupEventListeners() {
                     body: JSON.stringify(newMachine)
                 });
                 if (!response.ok) throw new Error('Server error');
-
                 state.machines.push(newMachine);
                 newMachineNameInput.value = '';
                 newMachineHasRobotCheckbox.checked = false;
@@ -1350,7 +1301,6 @@ function setupEventListeners() {
     if (addPartToEditBtn) addPartToEditBtn.addEventListener('click', () => {
         const orderId = editOrderForm.dataset.editingOrderId;
         if (!orderId) return;
-
         const partDiv = document.createElement('div');
         partDiv.className = 'edit-part-entry is-new grid grid-cols-1 md:grid-cols-4 gap-4 items-center border-l-4 border-green-400 p-2 rounded-md';
         partDiv.innerHTML = `
@@ -1371,20 +1321,17 @@ function setupEventListeners() {
             showNotification("Could not find the order to edit.", "error");
             return;
         }
-
         const updatedOrderData = JSON.parse(JSON.stringify(orderToUpdate));
         const newOrderId = document.getElementById('edit-order-id').value;
         updatedOrderData.id = newOrderId;
         updatedOrderData.customer = document.getElementById('edit-customer').value;
         updatedOrderData.customerOrderNr = document.getElementById('edit-customer-order-nr').value;
         updatedOrderData.deadline = document.getElementById('edit-deadline').value;
-
         let maxPartNumber = 0;
         updatedOrderData.parts.forEach(p => {
             const num = parseInt(p.id.split('-').pop());
             if (num > maxPartNumber) maxPartNumber = num;
         });
-
         const partForms = editPartsContainer.querySelectorAll('.edit-part-entry');
         partForms.forEach(partForm => {
             const originalPartId = partForm.dataset.partId;
@@ -1409,22 +1356,11 @@ function setupEventListeners() {
                 const newQuantity = parseInt(partForm.querySelector('[data-field="quantity"]').value);
                 const newProdTime = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value);
                 const newPart = {
-                    id: newPartId,
-                    partName: partForm.querySelector('[data-field="partName"]').value,
-                    drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value,
-                    quantity: newQuantity,
-                    productionTimePerPiece: newProdTime,
-                    totalHours: (newQuantity * newProdTime) / 60,
-                    materialStatus: 'Not Available',
-                    status: 'To Be Planned',
-                    machine: null,
-                    startDate: null,
-                    shift: 8,
+                    id: newPartId, partName: partForm.querySelector('[data-field="partName"]').value, drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value, quantity: newQuantity, productionTimePerPiece: newProdTime, totalHours: (newQuantity * newProdTime) / 60, materialStatus: 'Not Available', status: 'To Be Planned', machine: null, startDate: null, shift: 8,
                 };
                 updatedOrderData.parts.push(newPart);
             }
         });
-
         showLoadingOverlay();
         try {
             await updateOrderOnBackend(originalOrderId, updatedOrderData);
@@ -1443,6 +1379,7 @@ function setupEventListeners() {
     });
 
     if(planningContainer) {
+        let lastDragOverCell = null;
         planningContainer.addEventListener('dragstart', (e) => {
             if (e.target.classList.contains('order-block')) {
                 e.dataTransfer.setData('text/plain', e.target.dataset.partId);
@@ -1483,11 +1420,11 @@ function setupEventListeners() {
                     part.startDate = newDate;
                     part.machine = newMachine;
                     const machineInfo = state.machines.find(m => m.name === newMachine);
-                    if (part.shift === 24 && !machineInfo.hasRobot) {
+                    if (machineInfo && part.shift === 24 && !machineInfo.hasRobot) {
                         part.shift = 8;
                         showNotification("Shift was reset to Day (8h) because the new machine does not have a robot.", "error");
                     }
-                    if (part.shift === 16 && !machineInfo.name.includes('DMU')) {
+                    if (machineInfo && part.shift === 16 && !machineInfo.name.includes('DMU')) {
                         part.shift = 8;
                         showNotification("Shift was reset to Day (8h) because the new machine is not a DMU.", "error");
                     }
@@ -1655,11 +1592,14 @@ function renderMachineLoad(loadData) {
 // --- MODAL LOGIC ---
 let onConfirmCallback = null;
 
-function openConfirmModal(title, text, onConfirm) {
+function openConfirmModal(title, text, onConfirm, buttonText = 'Yes, delete') {
     const titleEl = document.getElementById('delete-confirm-title');
     const textEl = document.getElementById('delete-confirm-text');
+    const confirmBtn = document.getElementById('confirm-delete-btn');
+
     if (titleEl) titleEl.textContent = title;
     if (textEl) textEl.textContent = text;
+    if (confirmBtn) confirmBtn.textContent = buttonText;
     
     onConfirmCallback = onConfirm;
     confirmDeleteModal.classList.remove('hidden');
@@ -1718,7 +1658,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             deadlineInput.value = defaultDeadline.toISOString().split('T')[0];
         }
         
-        // Removed createNewPartForm() from initial load
         renderAll();
         
     } catch (error) {

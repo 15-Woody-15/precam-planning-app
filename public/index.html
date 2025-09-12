@@ -16,7 +16,7 @@
         <header class="mb-8 flex justify-between items-center">
             <div>
                 <h1 class="text-3xl font-bold text-gray-800">Precam - Machine Planning</h1>
-                <p class="text-gray-600 mt-1">Baseline: V1.3 (Quick Add Layout)</p>
+                <p class="text-gray-600 mt-1">Baseline: V1.4 (Cleaned UI)</p>
             </div>
             <div class="flex items-center gap-2">
                 <button id="show-new-order-modal-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md text-sm flex items-center gap-2">
@@ -26,10 +26,17 @@
                     Add New Order
                 </button>
                 <div class="border-l h-8 mx-2"></div> 
-                <button id="theme-toggle-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold p-2 rounded-md text-sm flex items-center gap-2">
-                    <svg id="theme-toggle-dark-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 008.252-4.498z"></path></svg>
-                    <svg id="theme-toggle-light-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 hidden"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"></path></svg>
-                </button>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="theme-toggle-checkbox">
+                    <span class="slider">
+                        <svg class="icon sun" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                        </svg>
+                        <svg class="icon moon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 008.252-4.498z" />
+                        </svg>
+                    </span>
+                </label>
                 
                 <button id="fullscreen-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md text-sm flex items-center gap-2">
                     <svg id="fullscreen-icon-enter" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m-9 6l-5.25 5.25m0-4.5v4.5m4.5 0h-4.5"></path></svg>
@@ -46,6 +53,9 @@
                         <a href="#" id="import-data-link" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">📥 Import from File...</a>
                         <a href="#" id="export-data-link" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">📤 Export to File...</a>
                         <div class="border-t my-1"></div>
+                        <button id="manage-customers-btn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">👤 Manage Customers</button>
+                        <button id="manage-machines-btn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">⚙️ Manage Machines</button>
+                        <div class="border-t my-1"></div>
                         <a href="#" id="clear-data-link" class="block px-4 py-2 text-sm text-red-700 hover:bg-red-100">🗑️ Clear All Data</a>
                     </div>
                 </div>
@@ -55,20 +65,16 @@
         <section class="bg-white p-6 rounded-lg shadow-md mb-8" aria-labelledby="order-list-heading">
             <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
                  <h2 id="order-list-heading" class="text-xl font-semibold text-gray-700">Order List</h2>
-                 <div class="flex items-center gap-4">
-                    <button id="manage-customers-btn" class="text-sm text-blue-600 hover:underline font-semibold">Manage Customers</button>
-                    <button id="manage-machines-btn" class="text-sm text-blue-600 hover:underline font-semibold">Manage Machines</button>
-                    <div class="flex items-center gap-2">
-                        <label for="search-key" class="text-sm font-medium text-gray-700">Search by:</label>
-                        <select id="search-key" class="bg-gray-50 rounded-md border-gray-300 shadow-sm sm:text-sm">
-                            <option value="customerOrderNr">Customer Order No.</option>
-                            <option value="id">Internal Order No.</option>
-                            <option value="partName">Part Name</option>
-                            <option value="customer">Customer</option>
-                            <option value="machine">Machine</option>
-                        </select>
-                        <input type="text" id="search-input" placeholder="Type here to search..." class="bg-gray-50 rounded-md border-gray-300 shadow-sm sm:text-sm">
-                    </div>
+                 <div class="flex items-center gap-2">
+                    <label for="search-key" class="text-sm font-medium text-gray-700">Search by:</label>
+                    <select id="search-key" class="bg-gray-50 rounded-md border-gray-300 shadow-sm sm:text-sm">
+                        <option value="customerOrderNr">Customer Order No.</option>
+                        <option value="id">Internal Order No.</option>
+                        <option value="partName">Part Name</option>
+                        <option value="customer">Customer</option>
+                        <option value="machine">Machine</option>
+                    </select>
+                    <input type="text" id="search-input" placeholder="Type here to search..." class="bg-gray-50 rounded-md border-gray-300 shadow-sm sm:text-sm">
                  </div>
             </div>
             <div class="overflow-x-auto">
