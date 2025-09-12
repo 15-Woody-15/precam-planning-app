@@ -59,7 +59,7 @@ app.get('/', (req, res) => {
 // --- ORDER ROUTES ---
 app.get('/api/orders', async (req, res) => {
   try {
-    const result = await pool.query('SELECT order_data FROM orders');
+    const result = await pool.query("SELECT order_data FROM orders WHERE order_data->>'status' IS NULL OR order_data->>'status' != 'Archived'");
     res.json(result.rows.map(row => row.order_data));
   } catch (err) {
     console.error("Error fetching orders:", err);
@@ -119,6 +119,32 @@ app.post('/api/orders/replace', async (req, res) => {
         res.status(500).json({ error: "Could not import orders" });
     } finally {
         client.release();
+    }
+});
+
+// Route om gearchiveerde orders op te halen
+app.get('/api/orders/archive', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT order_data FROM orders WHERE order_data->>'status' = 'Archived'");
+    res.json(result.rows.map(row => row.order_data));
+  } catch (err) {
+    console.error("Error fetching archived orders:", err);
+    res.status(500).json({ error: "Internal server error while fetching archived orders" });
+  }
+});
+
+// Route om een order te archiveren
+app.post('/api/orders/archive/:orderId', async (req, res) => {
+    const orderId = req.params.orderId;
+    try {
+        const client = await pool.connect();
+        // Updated query to ensure the status is correctly set within the JSONB object
+        await client.query('UPDATE orders SET order_data = order_data || \'{"status": "Archived"}\' WHERE id = $1', [orderId]);
+        client.release();
+        res.status(200).json({ message: 'Order successfully archived.' });
+    } catch (err) {
+        console.error("Error archiving order:", err);
+        res.status(500).json({ error: "Internal server error while archiving order" });
     }
 });
 

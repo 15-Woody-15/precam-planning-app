@@ -8,24 +8,28 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="p-4 md:p-8">
+<body class="">
     <input type="file" id="import-file-input" class="hidden" accept=".json,application/json">
     <div id="notification-container" class="fixed bottom-4 right-4 z-[9999] space-y-2"></div>
 
-    <main class="max-w-full mx-auto">
+    <main class="max-w-screen-2xl mx-auto p-2 md:p-4">
         <header class="mb-8 flex justify-between items-center">
             <div>
                 <h1 class="text-3xl font-bold text-gray-800">Precam - Machine Planning</h1>
                 <p class="text-gray-600 mt-1">Baseline: V1.4 (Cleaned UI)</p>
             </div>
             <div class="flex items-center gap-2">
+                <a href="archive.html" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md text-sm flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.756l-6.847-6.846a1.5 1.5 0 00-2.122 0L3.75 7.756M4.5 10.5v7.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25v-7.5m-6 3.75h-3" /></svg>
+                    Bekijk Archief
+                </a>
                 <button id="show-new-order-modal-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md text-sm flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
                     Add New Order
                 </button>
-                <div class="border-l h-8 mx-2"></div> 
+                <div class="border-l h-8 mx-2"></div>
                 <label class="toggle-switch">
                     <input type="checkbox" id="theme-toggle-checkbox">
                     <span class="slider">
@@ -77,7 +81,7 @@
                     <input type="text" id="search-input" placeholder="Type here to search..." class="bg-gray-50 rounded-md border-gray-300 shadow-sm sm:text-sm">
                  </div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto" id="order-list-scroll-container">
                 <table id="order-table" class="min-w-full">
                     <thead class="bg-gray-50">
                         <tr>
@@ -110,7 +114,7 @@
                     <button id="next-week-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-md text-sm" aria-label="Next week">Next &gt;</button>
                 </div>
             </div>
-            <div id="planning-container" class="overflow-x-auto pb-4"></div>
+            <div id="planning-container" class="pb-4"></div>
         </section>
     </main>
 

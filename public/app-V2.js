@@ -104,6 +104,7 @@ function initializeDOMElements() {
     cancelDeleteBtn = document.getElementById('cancel-delete-btn');
     deleteConfirmText = document.getElementById('delete-confirm-text');
     deleteConfirmTitle = document.getElementById('delete-confirm-title');
+    loadingOverlay = document.getElementById('loading-overlay');
 }
 
 // --- HELPER FUNCTIONS ---
@@ -154,6 +155,29 @@ function debounce(func, timeout = 750){
   };
 }
 
+function areAllPartsCompleted(order) {
+    if (!order.parts || order.parts.length === 0) {
+        return false;
+    }
+    return order.parts.every(part => part.status === 'Completed');
+}
+
+function getOverallOrderStatus(order) {
+     const partStatuses = order.parts.map(p => p.status);
+     if (partStatuses.length === 0) return 'Empty';
+     if (partStatuses.every(s => s === 'Completed')) return 'Completed';
+     if (partStatuses.some(s => s === 'Scheduled') || partStatuses.some(s => s === 'In Production')) return 'In Production';
+     return 'To Be Planned';
+}
+
+function findPart(partId) {
+    for (const order of state.orders) {
+        const foundPart = order.parts.find(p => p.id === partId);
+        if (foundPart) return foundPart;
+    }
+    return null;
+}
+
 // --- API FUNCTIONS ---
 const API_URL = 'https://precam-planning-api-app.onrender.com/api';
 
@@ -197,6 +221,27 @@ async function deleteOrderOnBackend(orderId) {
     });
     if (!response.ok) throw new Error(`Server error on delete: ${response.statusText}`);
     return;
+}
+
+async function archiveOrder(orderId) {
+    try {
+        const response = await fetch(`${API_URL}/orders/archive/${orderId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) {
+            throw new Error('Failed to archive order.');
+        }
+        showNotification('Order succesvol gearchiveerd!', 'success');
+        
+        // Verwijder de order uit de huidige lijst en herlaad de UI
+        state.orders = state.orders.filter(order => order.id !== orderId);
+        renderAll();
+
+    } catch (error) {
+        console.error("Error archiving order:", error);
+        showNotification('Kan order niet archiveren.', 'error');
+    }
 }
 
 // --- RENDER FUNCTIONS ---
@@ -353,11 +398,37 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
                 })()}
                 <span class="text-gray-500 text-sm ml-2">(${order.parts.length} parts)</span>
             </td>
-            <td class="px-3 py-3 text-right">
+            <td class="px-3 py-3 text-right actions-cell">
+                <button class="comment-toggle-btn text-gray-500 hover:text-gray-700 text-sm mr-2" data-order-id="${order.id}">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3h9m-1.5 6h.007L15 17.25h.007M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>
+                </button>
                 <button class="edit-order-btn text-sm text-blue-600 hover:underline font-semibold" data-order-id="${order.id}">Edit</button>
             </td>
         `;
         orderListBody.appendChild(groupTr);
+
+        const commentRow = document.createElement('tr');
+        commentRow.className = `comment-row ${!order.comment ? 'hidden' : ''}`;
+        commentRow.dataset.orderId = order.id;
+        commentRow.innerHTML = `
+            <td colspan="10" class="p-4">
+                <textarea class="comment-input w-full p-2 border rounded-md" placeholder="Add a comment...">${order.comment || ''}</textarea>
+            </td>
+        `;
+        orderListBody.appendChild(groupTr);
+        // Controleer of alle onderdelen zijn voltooid en de knop moet verschijnen
+        if (areAllPartsCompleted(order) && overallStatus !== 'Archived') {
+            const actionsCell = groupTr.querySelector('.actions-cell');
+            if(actionsCell){
+                const archiveBtn = document.createElement('button');
+                archiveBtn.className = 'bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-2 rounded text-xs mr-2';
+                archiveBtn.textContent = 'Archiveren';
+                archiveBtn.onclick = () => {
+                    archiveOrder(order.id);
+                };
+                actionsCell.prepend(archiveBtn);
+            }
+        }
         order.parts.forEach(part => {
             const tr = document.createElement('tr');
             tr.dataset.partId = part.id;
@@ -404,20 +475,24 @@ function renderOrderList({conflicts, partScheduleInfo, deadlineInfo}) {
                 <td class="px-3 py-3 whitespace-nowrap text-sm"><select class="bg-gray-50 shift-select rounded-md border-gray-300 text-sm" data-part-id="${part.id}" ${!part.machine ? 'disabled' : ''}>${shiftOptions}</select></td>
                 <td class="px-3 py-3 whitespace-nowrap"><input type="date" class="${startDateInputClass}" data-part-id="${part.id}" value="${part.startDate || ''}" title="${startDateTitle}"></td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm font-medium">
-                    <button class="toggle-status-btn text-green-600 hover:text-green-900" data-part-id="${part.id}">${part.status === 'Completed' ? 'Reopen' : 'Complete'}</button>
-                    <button class="delete-btn text-red-600 hover:text-red-900 ml-4" data-part-id="${part.id}">Delete</button>
+                    <div class="flex items-center">
+                        <button class="comment-toggle-btn text-gray-500 hover:text-gray-700 text-sm" data-part-id="${part.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3h9m-1.5 6h.007L15 17.25h.007M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>
+                        </button>
+                        <button class="toggle-status-btn text-green-600 hover:text-green-900 ml-4" data-part-id="${part.id}">${part.status === 'Completed' ? 'Reopen' : 'Complete'}</button>
+                        <button class="delete-btn text-red-600 hover:text-red-900 ml-4" data-part-id="${part.id}">Delete</button>
+                    </div>
                 </td>
             `;
             orderListBody.appendChild(tr);
         });
     });
 }
-
 function getOverallOrderStatus(order) {
      const partStatuses = order.parts.map(p => p.status);
      if (partStatuses.length === 0) return 'Empty';
      if (partStatuses.every(s => s === 'Completed')) return 'Completed';
-     if (partStatuses.some(s => s === 'Scheduled')) return 'In Production';
+     if (partStatuses.some(s => s === 'Scheduled') || partStatuses.some(s => s === 'In Production')) return 'In Production';
      return 'To Be Planned';
 }
 
@@ -537,6 +612,8 @@ function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
     const msPerDay = 1000 * 60 * 60 * 24;
     const machineNameIndexMap = new Map(state.machines.map((m, i) => [m.name, i]));
     const partsToDraw = state.orders.flatMap(o => o.parts.filter(p => p.machine && p.startDate && p.status !== 'Completed'));
+    const gridEndDate = new Date(gridStartDate);
+    gridEndDate.setDate(gridEndDate.getDate() + 21); // 21 days is 3 weeks
     
     partsToDraw.forEach(originalPart => {
         if (processedParts.has(originalPart.id)) return;
@@ -579,7 +656,7 @@ function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
         }
     });
 
-    return spanningBlocks.filter(block => block.end >= gridStartDate)
+    return spanningBlocks.filter(block => (block.end >= gridStartDate) && (block.start < gridEndDate))
         .map(block => {
             let effectiveStart = block.start;
             if (block.start < gridStartDate) {
@@ -606,7 +683,7 @@ function renderPlanningGrid(scheduleInfo) {
     const monthSpans = {}, weekSpans = {};
 
     let currentDate = new Date(gridStartDate);
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 21; i++) {
         const monthYear = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         const week = getWeekNumber(currentDate);
         if (!monthSpans[monthYear]) monthSpans[monthYear] = 0;
@@ -636,7 +713,7 @@ function renderPlanningGrid(scheduleInfo) {
     });
     
     currentDate = new Date(gridStartDate);
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 21; i++) {
         const cell = document.createElement('div');
         cell.className = 'grid-header day-header';
         cell.innerHTML = `${currentDate.getDate()}<br>${currentDate.toLocaleDateString('en-US', { weekday: 'short' })}`;
@@ -655,7 +732,7 @@ function renderPlanningGrid(scheduleInfo) {
         machineLabel.style.gridColumn = 1;
         grid.appendChild(machineLabel);
         let cellDate = new Date(gridStartDate);
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 21; i++) {
             const dayCell = document.createElement('div');
             dayCell.className = 'grid-cell';
             if ([0, 6].includes(cellDate.getDay())) dayCell.classList.add('weekend');
@@ -910,11 +987,25 @@ function setupEventListeners() {
                     return;
                 }
                 if (button.classList.contains('toggle-status-btn')) {
-                    part.status = part.status === 'Completed' ? 'Scheduled' : 'Completed';
-                    renderAll();
-                    debouncedSave(part);
-                    return;
-                }
+    const parentOrder = state.orders.find(o => o.parts.some(p => p.id === partId));
+    if (parentOrder) {
+        const partToToggle = parentOrder.parts.find(p => p.id === partId);
+        if (partToToggle) {
+            partToToggle.status = partToToggle.status === 'Completed' ? 'Scheduled' : 'Completed';
+            parentOrder.status = getOverallOrderStatus(parentOrder);
+            renderAll();
+            showLoadingOverlay();
+            try {
+                await updateOrderOnBackend(parentOrder.id, parentOrder);
+            } catch (error) {
+                showNotification(`Synchronization error: ${error.message}`, 'error');
+            } finally {
+                hideLoadingOverlay();
+            }
+        }
+    }
+    return;
+}
                 if (button.classList.contains('material-status-btn')) {
                     const currentIndex = MATERIAL_STATUS.indexOf(part.materialStatus);
                     part.materialStatus = MATERIAL_STATUS[(currentIndex + 1) % MATERIAL_STATUS.length];
@@ -1088,7 +1179,7 @@ function setupEventListeners() {
         let today = new Date();
         today.setHours(0, 0, 0, 0);
         const dayOfWeek = today.getDay();
-        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); 
         state.planningStartDate = new Date(today.setDate(diff)); 
         state.machineLoadWeek = null;
         renderAll();
@@ -1404,46 +1495,81 @@ function setupEventListeners() {
                 lastDragOverCell = null;
             }
         });
-        planningContainer.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            if (lastDragOverCell) {
-                lastDragOverCell.classList.remove('drag-over');
-                lastDragOverCell = null;
-            }
-            const partId = e.dataTransfer.getData('text/plain');
-            const targetCell = e.target.closest('.grid-cell');
-            if (partId && targetCell) {
-                const part = findPart(partId);
-                const newDate = targetCell.dataset.date;
-                const newMachine = targetCell.dataset.machine;
-                if (part && newDate && newMachine) {
-                    part.startDate = newDate;
-                    part.machine = newMachine;
-                    const machineInfo = state.machines.find(m => m.name === newMachine);
-                    if (machineInfo && part.shift === 24 && !machineInfo.hasRobot) {
-                        part.shift = 8;
-                        showNotification("Shift was reset to Day (8h) because the new machine does not have a robot.", "error");
+        if (planningContainer) {
+            let lastDragOverCell = null;
+            planningContainer.addEventListener('dragstart', (e) => {
+                if (e.target.classList.contains('order-block')) {
+                    e.dataTransfer.setData('text/plain', e.target.dataset.partId);
+                    e.dataTransfer.effectAllowed = 'move';
+                    setTimeout(() => e.target.classList.add('dragging'), 0);
+                }
+            });
+            planningContainer.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const targetCell = e.target.closest('.grid-cell');
+                if (targetCell) {
+                    if (lastDragOverCell && lastDragOverCell !== targetCell) {
+                        lastDragOverCell.classList.remove('drag-over');
                     }
-                    if (machineInfo && part.shift === 16 && !machineInfo.name.includes('DMU')) {
-                        part.shift = 8;
-                        showNotification("Shift was reset to Day (8h) because the new machine is not a DMU.", "error");
-                    }
-                    renderAll();
-                    const order = state.orders.find(o => o.parts.some(p => p.id === partId));
-                    if (order) {
-                        showLoadingOverlay();
-                        try {
-                            await updateOrderOnBackend(order.id, order);
-                            showNotification(`Order ${order.id} moved and saved!`, 'success');
-                        } catch (error) {
-                            showNotification(`Synchronization error: ${error.message}`, 'error');
-                        } finally {
-                            hideLoadingOverlay();
+                    targetCell.classList.add('drag-over');
+                    lastDragOverCell = targetCell;
+                }
+            });
+            planningContainer.addEventListener('dragleave', (e) => {
+                if (lastDragOverCell) {
+                    lastDragOverCell.classList.remove('drag-over');
+                    lastDragOverCell = null;
+                }
+            });
+            planningContainer.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                if (lastDragOverCell) {
+                    lastDragOverCell.classList.remove('drag-over');
+                    lastDragOverCell = null;
+                }
+                const partId = e.dataTransfer.getData('text/plain');
+                const targetCell = e.target.closest('.grid-cell');
+                if (partId && targetCell) {
+                    const part = findPart(partId);
+                    const newDate = targetCell.dataset.date;
+                    const newMachine = targetCell.dataset.machine;
+                    if (part && newDate && newMachine) {
+                        part.startDate = newDate;
+                        part.machine = newMachine;
+                        const machineInfo = state.machines.find(m => m.name === newMachine);
+                        if (machineInfo && part.shift === 24 && !machineInfo.hasRobot) {
+                            part.shift = 8;
+                            showNotification("Shift was reset to Day (8h) because the new machine does not have a robot.", "error");
+                        }
+                        if (machineInfo && part.shift === 16 && !machineInfo.name.includes('DMU')) {
+                            part.shift = 8;
+                            showNotification("Shift was reset to Day (8h) because the new machine is not a DMU.", "error");
+                        }
+                        renderAll();
+                        
+                        // DEZE LOGICA IS NU CORRECT
+                        const order = state.orders.find(o => o.parts.some(p => p.id === partId));
+                        if (order) {
+                            showLoadingOverlay();
+                            try {
+                                // We geven hier het correcte order.id mee
+                                await updateOrderOnBackend(order.id, order);
+                                showNotification(`Order ${order.id} moved and saved!`, 'success');
+                            } catch (error) {
+                                showNotification(`Synchronization error: ${error.message}`, 'error');
+                            } finally {
+                                hideLoadingOverlay();
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+            planningContainer.addEventListener('dragend', (e) => {
+                if (e.target.classList.contains('order-block')) {
+                    e.target.classList.remove('dragging');
+                }
+            });
+        }
         planningContainer.addEventListener('dragend', (e) => {
             if (e.target.classList.contains('order-block')) {
                 e.target.classList.remove('dragging');

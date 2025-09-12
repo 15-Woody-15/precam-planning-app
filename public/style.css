@@ -196,7 +196,7 @@ body {
 
 .planning-grid { 
     display: grid; 
-    grid-template-columns: 140px repeat(30, minmax(60px, 1fr)); 
+    grid-template-columns: 180px repeat(21, 59px); 
     grid-auto-rows: 40px;
     gap: 2px;
     position: relative; 
@@ -249,7 +249,7 @@ body {
     color: var(--kleur-wit); 
     padding: 2px 8px; 
     border-radius: 4px; 
-    font-size: 11px; 
+    font-size: 10px; 
     font-weight: 500; 
     overflow: hidden; 
     text-overflow: ellipsis; 
@@ -268,7 +268,7 @@ body {
 
 .order-block:active { cursor: grabbing; }
 
-.materiaal-ontbreekt {
+.material-missing {
     opacity: 0.6;
     background: repeating-linear-gradient(45deg, currentColor, currentColor 4px, rgba(255, 255, 255, 0.2) 4px, rgba(255, 255, 255, 0.2) 8px);
 }
@@ -442,4 +442,17 @@ input:checked + .slider {
 
 input:checked + .slider:before {
     transform: translateX(26px); /* Verplaats het bolletje naar rechts */
+}
+
+/* Zorgt ervoor dat de orderlijst een vaste hoogte heeft met een schuifbalk */
+#order-list-scroll-container {
+    max-height: 425px;
+    overflow-y: auto;
+}
+
+/* Zorgt ervoor dat de thead (de kop van de tabel) blijft staan tijdens het scrollen */
+#order-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
