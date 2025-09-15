@@ -1,6 +1,7 @@
 /* Definieer alle kleuren als herbruikbare variabelen */
 :root {
-    --kleur-achtergrond: #f3f4f6;
+    --kleur-achtergrond: #dddddd;
+    --kleur-sectie-achtergrond: #ffffff;
     --kleur-wit: #ffffff;
     --kleur-tekst-grijs: #e5e7eb;
     --kleur-tekst-donkergrijs: #f9fafb;
@@ -33,16 +34,17 @@
 
 /* Definieer de kleuren voor Dark Mode */
 html.dark {
-    --kleur-achtergrond: #111827; /* Zeer donkerblauw */
-    --kleur-wit: #1f2937; /* Donkergrijs/blauw voor kaarten */
-    --kleur-tekst-grijs: #4b5563; /* Donkerder grijs voor subtiele elementen */
+    --kleur-achtergrond: #000000;
+    --kleur-sectie-achtergrond: #222222;
+    --kleur-wit: #636363;
+    --kleur-tekst-grijs: #4b5563;
     --kleur-tekst-donkergrijs: #111827;
     --kleur-header-achtergrond: #374151;
     --kleur-week-header-achtergrond: #312e81;
     --kleur-vandaag-achtergrond: #1e1b4b;
-    --kleur-urgent-achtergrond: #fee2e2; /* Urgent krijgt nu een lichte achtergrond voor contrast */
+    --kleur-urgent-achtergrond: #fee2e2;
     --kleur-drag-over-achtergrond: #1e40af;
-    --kleur-vertraagd-achtergrond: #fef9c3; /* Vertraagd ook een lichte achtergrond */
+    --kleur-vertraagd-achtergrond: #fef9c3;
 }
 
 /* Algemene tekstkleuren voor betere leesbaarheid */
@@ -111,11 +113,14 @@ html.dark #actions-dropdown-menu .text-red-700:hover {
 }
 
 /* Maak de 3 hoofdsecties donker */
-html.dark section[aria-labelledby="new-order-heading"],
+section[aria-labelledby="order-list-heading"],
+section[aria-labelledby="planning-heading"] {
+    background-color: var(--kleur-sectie-achtergrond); /* Gebruikt onze nieuwe variabele */
+}
+
 html.dark section[aria-labelledby="order-list-heading"],
 html.dark section[aria-labelledby="planning-heading"] {
-    background-color: var(--kleur-wit); /* Gebruikt de donkergrijze 'wit'-variant */
-    border: 1px solid #374151;
+    border: 1px solid #374151; /* De rand voor donkere modus blijft apart */
 }
 
 /* Maak de header van de orderlijst-tabel donker */
@@ -222,6 +227,12 @@ body {
 .week-header { top: 39px; background-color: var(--kleur-week-header-achtergrond); }
 .day-header { top: 78px; }
 
+.day-header.today {
+    background-color: #d7a0f7; /* Een mooie, zachte indigo-kleur */
+    font-weight: bold;
+    color: #3730a3; /* Donkerdere tekst voor beter contrast */
+}
+
 .machine-label { 
     background-color: var(--kleur-header-achtergrond); 
     font-weight: 600; 
@@ -234,9 +245,13 @@ body {
     justify-content:center;
 }
 
-.grid-cell { background-color: var(--kleur-wit); }
-.grid-cell.weekend { background-color: var(--kleur-tekst-donkergrijs); }
-.grid-cell.today { background-color: var(--kleur-vandaag-achtergrond); }
+.grid-cell { 
+    background-color: var(--kleur-wit); 
+    border: 1px solid #b8b8b8; /* <-- DUNNE GRIJZE RAND TOEGEVOEGD */
+}
+.grid-cell.weekend { 
+    background-color: #b9b9b9; /* <-- IETS DONKERDERE, NEUTRALE ACHTERGROND */
+}
         
 .grid-cell.drag-over {
     background-color: var(--kleur-drag-over-achtergrond) !important;
@@ -320,6 +335,34 @@ body {
 .delayed-start {
     background-color: var(--kleur-vertraagd-achtergrond) !important;
     border-color: var(--kleur-vertraagd-border) !important;
+}
+
+.comment-input {
+    border: 1px solid #d1d5db; /* Standaard randkleur */
+    transition: border-color 0.3s ease-in-out;
+}
+
+/* Stijl voor wanneer je in het tekstvak klikt (focus) */
+.comment-input:focus {
+    outline: none; /* Verwijder de standaard blauwe browser-outline */
+    border-color: #4f46e5; /* Geef het een subtiele paarse rand bij focus */
+    box-shadow: none; /* Verwijder eventuele andere schaduw-effecten */
+}
+
+/* Zorg ervoor dat onze statuskleuren ALTIJD winnen, ook bij focus */
+.comment-input.saving, 
+.comment-input.saving:focus {
+    border-color: #fbbf24 !important; /* Geel/oranje voor 'bezig' */
+}
+
+.comment-input.saved, 
+.comment-input.saved:focus {
+    border-color: #22c55e !important; /* Groen voor 'gelukt' */
+}
+
+.comment-input.error, 
+.comment-input.error:focus {
+    border-color: #ef4444 !important; /* Rood voor 'fout' */
 }
 
 .notification {
@@ -455,4 +498,53 @@ input:checked + .slider:before {
     position: sticky;
     top: 0;
     z-index: 10;
+}
+
+.absence-cell {
+    background-color: #feffbe; /* Een neutrale grijze achtergrond */
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.05),
+        rgba(0, 0, 0, 0.05) 10px,
+        transparent 10px,
+        transparent 20px
+    );
+    cursor: not-allowed;
+}
+
+/* style.css (onderaan toevoegen) */
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    text-align: center;
+}
+.calendar-day {
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.calendar-day.other-month {
+    color: #9ca3af; /* gray-400 */
+}
+.calendar-day:not(.other-month):hover {
+    background-color: #eef2ff; /* indigo-50 */
+}
+.calendar-day.selected {
+    background-color: #4f46e5 !important; /* indigo-600 */
+    color: white;
+}
+.calendar-day.in-range {
+    background-color: #c7d2fe; /* indigo-200 */
+    border-radius: 0;
+}
+.calendar-day.range-start {
+    border-top-left-radius: 50%;
+    border-bottom-left-radius: 50%;
+}
+.calendar-day.range-end {
+    border-top-right-radius: 50%;
+    border-bottom-right-radius: 50%;
 }

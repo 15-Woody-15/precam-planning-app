@@ -1,0 +1,107 @@
+/**
+ * Toont een laad-overlay op de pagina.
+ * @param {HTMLElement} loadingOverlay - Het overlay-element dat getoond moet worden.
+ */
+export function showLoadingOverlay(loadingOverlay) {
+    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+}
+
+/**
+ * Verbergt een laad-overlay op de pagina.
+ * @param {HTMLElement} loadingOverlay - Het overlay-element dat verborgen moet worden.
+ */
+export function hideLoadingOverlay(loadingOverlay) {
+    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+}
+
+/**
+ * Formatteert een Date-object of datum-string naar "YYYY-MM-DD".
+ * @param {Date|string} date - De datum om te formatteren.
+ * @returns {string} De geformatteerde datum-string.
+ */
+export const formatDateToYMD = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    const year = d.getFullYear();
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+/**
+ * Berekent het weeknummer van een gegeven datum.
+ * @param {Date} d - De datum.
+ * @returns {number} Het weeknummer.
+ */
+export const getWeekNumber = (d) => {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return weekNo;
+};
+
+/**
+ * Toont een notificatiebericht op het scherm.
+ * @param {string} message - Het bericht dat getoond moet worden.
+ * @param {'success'|'error'} type - Het type notificatie ('success' of 'error').
+ * @param {HTMLElement} container - De container waarin de notificatie moet verschijnen.
+ */
+export function showNotification(message, type = 'success', container) {
+    if (!container) return;
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    container.appendChild(notification);
+    setTimeout(() => {
+        notification.classList.add('hiding');
+        notification.addEventListener('transitionend', () => notification.remove());
+    }, 3000);
+}
+
+/**
+ * Haalt de totale productieduur in uren op van een onderdeel.
+ * @param {object} part - Het onderdeel-object.
+ * @returns {number} De totale duur in uren.
+ */
+export const getPartDuration = (part) => part.totalHours || 0;
+
+/**
+ * Creëert een "debounced" versie van een functie die pas wordt uitgevoerd na een bepaalde tijd van inactiviteit.
+ * @param {Function} func - De functie die gedebounced moet worden.
+ * @param {number} timeout - De wachttijd in milliseconden.
+ * @returns {Function} De nieuwe, gedebounced functie.
+ */
+export function debounce(func, timeout = 750) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { func.apply(this, args); }, timeout);
+  };
+}
+
+/**
+ * Controleert of alle onderdelen van een order de status 'Completed' hebben.
+ * @param {object} order - Het order-object.
+ * @returns {boolean} True als alle onderdelen voltooid zijn, anders false.
+ */
+export function areAllPartsCompleted(order) {
+    if (!order.parts || order.parts.length === 0) {
+        return false;
+    }
+    return order.parts.every(part => part.status === 'Completed');
+}
+
+/**
+ * Bepaalt de overkoepelende status van een order op basis van de status van de onderdelen.
+ * @param {object} order - Het order-object.
+ * @returns {string} De algemene orderstatus ('Empty', 'Completed', 'In Production', of 'To Be Planned').
+ */
+export function getOverallOrderStatus(order) {
+     const partStatuses = order.parts.map(p => p.status);
+     if (partStatuses.length === 0) return 'Empty';
+     if (partStatuses.every(s => s === 'Completed')) return 'Completed';
+     if (partStatuses.some(s => s === 'Scheduled') || partStatuses.some(s => s === 'In Production')) return 'In Production';
+     return 'To Be Planned';
+}
