@@ -2,6 +2,8 @@
 :root {
     --kleur-achtergrond: #dddddd;
     --kleur-sectie-achtergrond: #ffffff;
+    --kleur-tekst-primair: #111827; /* Een zeer donkergrijs, bijna zwart */
+    --kleur-tekst-secundair: #4b5563; /* Een donkergrijs voor details */
     --kleur-wit: #ffffff;
     --kleur-tekst-grijs: #e5e7eb;
     --kleur-tekst-donkergrijs: #f9fafb;
@@ -36,6 +38,8 @@
 html.dark {
     --kleur-achtergrond: #000000;
     --kleur-sectie-achtergrond: #222222;
+    --kleur-tekst-primair: #f9fafb; /* Bijna wit voor dark mode */
+    --kleur-tekst-secundair: #9ca3af; /* Lichter grijs voor details in dark mode */
     --kleur-wit: #636363;
     --kleur-tekst-grijs: #4b5563;
     --kleur-tekst-donkergrijs: #111827;
@@ -199,6 +203,13 @@ body {
     background-color: var(--kleur-achtergrond); 
 }
 
+.part-name-display {
+    color: var(--kleur-tekst-primair);
+}
+.part-id-display {
+    color: var(--kleur-tekst-secundair);
+}
+
 .planning-grid { 
     display: grid; 
     grid-template-columns: 180px repeat(21, 59px); 
@@ -337,32 +348,49 @@ body {
     border-color: var(--kleur-vertraagd-border) !important;
 }
 
+/* --- Comment Input Feedback Styles (Enhanced Version) --- */
+
 .comment-input {
-    border: 1px solid #d1d5db; /* Standaard randkleur */
-    transition: border-color 0.3s ease-in-out;
+    /* Standaard transitie voor een soepele overgang */
+    transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
 }
 
-/* Stijl voor wanneer je in het tekstvak klikt (focus) */
 .comment-input:focus {
-    outline: none; /* Verwijder de standaard blauwe browser-outline */
-    border-color: #4f46e5; /* Geef het een subtiele paarse rand bij focus */
-    box-shadow: none; /* Verwijder eventuele andere schaduw-effecten */
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.4);
 }
 
-/* Zorg ervoor dat onze statuskleuren ALTIJD winnen, ook bij focus */
-.comment-input.saving, 
+/* Stijl voor wanneer de opmerking wordt opgeslagen */
+.comment-input.saving,
 .comment-input.saving:focus {
-    border-color: #fbbf24 !important; /* Geel/oranje voor 'bezig' */
+    border-color: #fbbf24 !important; /* Amber-400 */
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5) !important;
+    animation: pulse 1.5s infinite;
 }
 
-.comment-input.saved, 
+/* Stijl voor een succesvol opgeslagen opmerking */
+.comment-input.saved,
 .comment-input.saved:focus {
-    border-color: #22c55e !important; /* Groen voor 'gelukt' */
+    border-color: #22c55e !important; /* Green-500 */
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.5) !important;
 }
 
-.comment-input.error, 
+/* Stijl voor wanneer het opslaan mislukt */
+.comment-input.error,
 .comment-input.error:focus {
-    border-color: #ef4444 !important; /* Rood voor 'fout' */
+    border-color: #ef4444 !important; /* Red-500 */
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.5) !important;
+}
+
+/* De @keyframes 'pulse' animatie moet ook in het bestand staan (je hebt hem al) */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }
 
 .notification {
@@ -487,17 +515,38 @@ input:checked + .slider:before {
     transform: translateX(26px); /* Verplaats het bolletje naar rechts */
 }
 
-/* Zorgt ervoor dat de orderlijst een vaste hoogte heeft met een schuifbalk */
+/* --- Definitieve Fix voor Sticky Table Header --- */
+
+/* 1. Reserveer altijd ruimte voor de scrollbar om de "sprong" te voorkomen. */
 #order-list-scroll-container {
     max-height: 425px;
-    overflow-y: auto;
+    overflow-y: scroll; 
 }
 
-/* Zorgt ervoor dat de thead (de kop van de tabel) blijft staan tijdens het scrollen */
+/* 2. Dwing een voorspelbare tabel-layout af. */
+#order-table {
+    min-width: 100%;
+    table-layout: fixed; 
+}
+
+/* 3. Maak de header-rij sticky. */
 #order-table thead {
     position: sticky;
     top: 0;
     z-index: 10;
+}
+
+/* 4. Maak ook elke header-cel sticky en geef ze een eigen achtergrond. */
+#order-table th {
+    position: sticky;
+    top: 0;
+    background-color: #f9fafb; /* Standaard lichte achtergrond */
+    z-index: 11;
+}
+
+/* 5. Zorg voor de juiste achtergrond in dark mode. */
+html.dark #order-table th {
+    background-color: #374151; /* Donkere achtergrond */
 }
 
 .absence-cell {
@@ -547,4 +596,23 @@ input:checked + .slider:before {
 .calendar-day.range-end {
     border-top-right-radius: 50%;
     border-bottom-right-radius: 50%;
+}
+
+.drag-preview {
+    position: absolute;
+    /* Begin buiten het scherm, de browser verplaatst het zelf */
+    top: -9999px;
+    left: -9999px;
+    /* Styling */
+    background-color: var(--kleur-sectie-achtergrond);
+    color: var(--kleur-tekst-primair);
+    padding: 6px 14px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    border: 1px solid var(--kleur-rand);
+    font-size: 14px;
+    font-weight: 600;
+    /* Voorkom dat de preview zelf events blokkeert */
+    pointer-events: none;
+    z-index: 9999;
 }

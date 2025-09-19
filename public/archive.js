@@ -35,7 +35,17 @@ function renderArchiveList() {
     allArchivedOrders.forEach(order => {
         const row = document.createElement('tr');
         row.className = 'border-b hover:bg-gray-50';
-        const totalDuration = order.parts ? order.parts.reduce((sum, part) => sum + (part.totalHours || 0), 0).toFixed(1) : 0;
+        const totalDuration = order.parts ? order.parts.reduce((sum, part) => {
+            let partTotalHours = 0;
+            // Als het onderdeel batches heeft, tel de uren van de batches op
+            if (part.batches && part.batches.length > 0) {
+                partTotalHours = part.batches.reduce((batchSum, batch) => batchSum + (batch.totalHours || 0), 0);
+            } else {
+                // Anders, gebruik de oude structuur
+                partTotalHours = part.totalHours || 0;
+            }
+            return sum + partTotalHours;
+        }, 0).toFixed(1) : 0;
 
         row.innerHTML = `
             <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${order.id || 'N/A'}</td>
@@ -61,12 +71,23 @@ function renderDetailsModal(order) {
     
     let partsHtml = `<ul class="list-disc list-inside space-y-2">`;
     (order.parts || []).forEach(part => {
+        // --- DIT IS DE FIX ---
+        // Bepaal het correcte aantal en de totale uren, ongeacht de structuur.
+        const quantity = part.totalQuantity || part.quantity || 0;
+        let totalHours = 0;
+        if (part.batches && part.batches.length > 0) {
+            totalHours = part.batches.reduce((sum, batch) => sum + (batch.totalHours || 0), 0);
+        } else {
+            totalHours = part.totalHours || 0;
+        }
+        // --- EINDE FIX ---
+
         partsHtml += `
             <li class="bg-gray-100 p-3 rounded-md">
                 <strong>Onderdeel Naam:</strong> ${part.partName}<br>
                 <strong>Tekening Nr:</strong> ${part.drawingNumber || 'N/A'}<br>
-                <strong>Aantal:</strong> ${part.quantity} stuks<br>
-                <strong>Totale Tijdsduur:</strong> ${(part.totalHours || 0).toFixed(1)} uur
+                <strong>Aantal:</strong> ${quantity} stuks<br>
+                <strong>Totale Tijdsduur:</strong> ${totalHours.toFixed(1)} uur
             </li>
         `;
     });

@@ -1,9 +1,11 @@
-import { state, findPart } from './state.js';
+// js/schedule.js
+
+import { state, findPart, findBatch, getPlannableItems } from './state.js';
 import * as utils from './utils.js';
 
 /**
  * Berekent het volledige productieschema en detecteert conflicten.
- * @returns {object} Een object met het schema, conflicten, en part-specifieke info.
+ * @returns {object} Een object met het schema, conflicten, en item-specifieke info.
  */
 export function buildScheduleAndDetectConflicts() {
     const schedule = {};
@@ -13,34 +15,32 @@ export function buildScheduleAndDetectConflicts() {
 
     state.machines.forEach(m => schedule[m.name] = {});
 
-    const partsToSchedule = state.orders
-        .flatMap(order =>
-            order.parts.map(part => ({ ...part, isUrgent: order.isUrgent }))
-        )
-        .filter(p => p.machine && p.startDate && p.status !== 'Completed')
+    const itemsToSchedule = getPlannableItems()
+        .filter(item => item.machine && item.startDate && item.status !== 'Completed')
         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate) || (b.isUrgent - a.isUrgent));
 
-    partsToSchedule.forEach(part => {
-        if (!schedule[part.machine]) {
-            console.error(`Error: Machine "${part.machine}" found in an order part, but not in the machine list. Skipping this part.`);
+    itemsToSchedule.forEach(item => {
+        if (!schedule[item.machine]) {
+            console.error(`Error: Machine "${item.machine}" not found. Skipping item.`);
             return;
         }
-        let remainingHours = utils.getPartDuration(part);
-        let currentDate = new Date(part.startDate + 'T00:00:00');
+        let remainingHours = item.totalHours || 0;
+        let currentDate = new Date(item.startDate + 'T00:00:00');
         let actualStartDate = null;
+
         while (remainingHours > 0.01) {
-            if (part.shift === 8 && (currentDate.getDay() === 6 || currentDate.getDay() === 0)) {
+            if (item.shift === 8 && (currentDate.getDay() === 6 || currentDate.getDay() === 0)) {
                 currentDate.setDate(currentDate.getDate() + 1);
                 continue;
             }
 
             const dateString = utils.formatDateToYMD(currentDate);
-            if (!schedule[part.machine][dateString]) {
-                schedule[part.machine][dateString] = { parts: [], totalHours: 0 };
+            if (!schedule[item.machine][dateString]) {
+                schedule[item.machine][dateString] = { parts: [], totalHours: 0 };
             }
 
-            const daySchedule = schedule[part.machine][dateString];
-            const dayCapacity = daySchedule.parts.length > 0 ? findPart(daySchedule.parts[0].partId).shift : part.shift;
+            const daySchedule = schedule[item.machine][dateString];
+            const dayCapacity = item.shift || 8;
             const availableHours = dayCapacity - daySchedule.totalHours;
 
             if (!actualStartDate) {
@@ -53,7 +53,7 @@ export function buildScheduleAndDetectConflicts() {
 
             const hoursToBook = Math.min(remainingHours, availableHours);
             if (hoursToBook > 0) {
-                daySchedule.parts.push({ partId: part.id, hours: hoursToBook });
+                daySchedule.parts.push({ partId: item.id, hours: hoursToBook });
                 daySchedule.totalHours += hoursToBook;
             }
             remainingHours -= hoursToBook;
@@ -62,27 +62,36 @@ export function buildScheduleAndDetectConflicts() {
                 currentDate.setDate(currentDate.getDate() + 1);
             }
         }
-        partScheduleInfo.set(part.id, {
+        partScheduleInfo.set(item.id, {
             actualStartDate: actualStartDate,
             actualEndDate: new Date(currentDate),
-            isDelayed: actualStartDate && utils.formatDateToYMD(actualStartDate) !== part.startDate
+            isDelayed: actualStartDate && utils.formatDateToYMD(actualStartDate) !== item.startDate
         });
     });
 
+    // =================== DIT IS DE AANGEPASTE DEADLINE-CONTROLE ===================
+    const allPlannableItems = getPlannableItems();
+
     state.orders.forEach(order => {
-        let latestEndDate = null;
-        order.parts.forEach(part => {
-            const info = partScheduleInfo.get(part.id);
-            if (info && info.actualEndDate && (!latestEndDate || info.actualEndDate > latestEndDate)) {
-                latestEndDate = info.actualEndDate;
+        let orderWillMissDeadline = false;
+        const itemsInOrder = allPlannableItems.filter(i => i.orderId === order.id);
+        
+        itemsInOrder.forEach(item => {
+            const scheduleInfo = partScheduleInfo.get(item.id);
+            // Check of de taak een geplande einddatum en een productiedeadline heeft
+            if (scheduleInfo && scheduleInfo.actualEndDate && item.productionDeadline) {
+                const endDate = scheduleInfo.actualEndDate;
+                const deadlineDate = new Date(item.productionDeadline + 'T23:59:59'); // Einde van de dag
+                
+                // Als de einddatum LATER is dan de productiedeadline, markeer de order
+                if (endDate > deadlineDate) {
+                    orderWillMissDeadline = true;
+                }
             }
         });
 
-        if (latestEndDate && order.deadline) {
-            const deadlineDate = new Date(order.deadline);
-            if (latestEndDate > deadlineDate) {
-                deadlineInfo.set(order.id, true);
-            }
+        if (orderWillMissDeadline) {
+            deadlineInfo.set(order.id, true);
         }
     });
 
@@ -90,9 +99,20 @@ export function buildScheduleAndDetectConflicts() {
         for (const date in schedule[machine]) {
             const dayInfo = schedule[machine][date];
             if (dayInfo.parts.length <= 1) continue;
-            const firstPartShift = findPart(dayInfo.parts[0].partId).shift;
-            let hasShiftMismatch = dayInfo.parts.some(p => findPart(p.partId).shift !== firstPartShift);
-            let isOverbooked = dayInfo.totalHours > firstPartShift + 0.01;
+
+            const getItem = (id) => getPlannableItems().find(i => i.id === id);
+            
+            const firstItem = getItem(dayInfo.parts[0].partId);
+            if (!firstItem) continue;
+
+            const firstPartShift = firstItem.shift;
+            
+            let hasShiftMismatch = dayInfo.parts.some(p => {
+                const currentItem = getItem(p.partId);
+                return currentItem && currentItem.shift !== firstPartShift;
+            });
+            let isOverbooked = dayInfo.totalHours > (firstPartShift || 8) + 0.01;
+
             if (isOverbooked || hasShiftMismatch) {
                 dayInfo.parts.forEach(p => conflicts.set(p.partId, dayInfo.parts.map(p2 => p2.partId).filter(id => id !== p.partId)));
             }

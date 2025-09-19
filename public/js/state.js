@@ -1,74 +1,133 @@
-// in state.js
+// js/state.js
 
-/**
- * @typedef {object} OrderPart
- * @property {string} id
- * @property {string} partName
- * // ... (voeg hier eventueel andere eigenschappen van een 'part' toe)
- */
+import { MATERIAL_STATUS } from './constants.js';
+import * as utils from './utils.js';
 
-/**
- * @typedef {object} Order
- * @property {string} id
- * @property {string} customer
- * @property {OrderPart[]} parts
- * // ... (voeg hier eventueel andere eigenschappen van een 'order' toe)
- */
+const STORAGE_KEY = 'planning_state_v1';
 
-// --- CONFIGURATION ---
-export const MATERIAL_STATUS = ['Not Available', 'Ordered', 'Available'];
-const STORAGE_KEY = 'planning_orders_v35_en';
+// Helper functie om de opgeslagen state te laden
+const getStoredState = () => {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+        console.error("Could not parse stored state:", e);
+        return {};
+    }
+};
 
-// --- APPLICATION STATE ---
+const storedState = getStoredState();
 
-/**
- * Bevat de centrale data van de applicatie.
- * @property {Order[]} orders - De lijst met actieve orders.
- * @property {string[]} customers - De lijst met alle klanten.
- * @property {object[]} machines - De lijst met alle machines.
- * @property {boolean} isLoadModalVisible - Bepaalt of de machine load modal zichtbaar is.
- * @property {number|null} machineLoadWeek - Het geselecteerde weeknummer in de machine load modal.
- * @property {Set<string>} expandedOrders - Een set met de ID's van de uitgeklapte orders in de lijst.
- * @property {Date} planningStartDate - De startdatum van de visuele planning.
- * @property {string} sortKey - De kolom waarop de orderlijst gesorteerd is.
- * @property {'asc'|'desc'} sortOrder - De sorteervolgorde ('asc' of 'desc').
- * @property {string} searchTerm - De huidige zoekterm.
- * @property {string} searchKey - De kolom waarop gezocht wordt.
- */
 export let state = {
     orders: [],
     customers: [],
     machines: [],
-    isLoadModalVisible: JSON.parse(localStorage.getItem(STORAGE_KEY))?.isLoadModalVisible || false,
-    machineLoadWeek: JSON.parse(localStorage.getItem(STORAGE_KEY))?.machineLoadWeek || null,
-    expandedOrders: new Set(JSON.parse(localStorage.getItem(STORAGE_KEY))?.expandedOrders || []),
+    absences: [],
+    isLoadModalVisible: storedState.isLoadModalVisible || false,
+    machineLoadWeek: storedState.machineLoadWeek || null,
+    expandedOrders: new Set(storedState.expandedOrders || []),
+    expandedParts: new Set(storedState.expandedParts || []),
     planningStartDate: new Date(),
-    sortKey: 'deadline',
-    sortOrder: 'asc',
-    searchTerm: '',
-    searchKey: 'customerOrderNr',
+    // --- AANPASSING 1: Laad de waarden uit localStorage, of gebruik de standaardwaarde ---
+    sortKey: storedState.sortKey || 'deadline',
+    sortOrder: storedState.sortOrder || 'asc',
+    searchTerm: storedState.searchTerm || '',
+    searchKey: storedState.searchKey || 'customerOrderNr',
 };
 
-/**
- * Slaat de gebruikersvoorkeuren (zoals de geopende modal) op in localStorage.
- */
 export function saveStateToLocalStorage() {
      localStorage.setItem(STORAGE_KEY, JSON.stringify({
          isLoadModalVisible: state.isLoadModalVisible,
          machineLoadWeek: state.machineLoadWeek,
          expandedOrders: [...state.expandedOrders],
+         expandedParts: [...state.expandedParts],
+         // --- AANPASSING 2: Sla de nieuwe waarden ook op ---
+         sortKey: state.sortKey,
+         sortOrder: state.sortOrder,
+         searchTerm: state.searchTerm,
+         searchKey: state.searchKey,
      }));
 }
 
 /**
- * Zoekt een specifiek onderdeel in de volledige lijst van orders.
- * @param {string} partId - De ID van het onderdeel dat gezocht wordt.
- * @returns {OrderPart|null} Het gevonden onderdeel-object, of null als het niet gevonden is.
+ * Maakt een platte lijst van alle planbare items (zowel oude parts als nieuwe batches).
+ * Dit is de basis voor de plannings- en renderlogica.
+ * @returns {Array<object>} Een lijst met planbare items.
+ */
+export function getPlannableItems() {
+    const items = [];
+    state.orders.forEach(order => {
+        order.parts.forEach(part => {
+            // =================== DIT IS DE NIEUWE LOGICA ===================
+            // Bereken de interne productiedeadline op basis van nabehandeling.
+            let productionDeadline = order.deadline;
+            if (part.needsPostProcessing && part.postProcessingDays > 0) {
+                const deadlineDate = new Date(order.deadline + 'T00:00:00');
+                deadlineDate.setDate(deadlineDate.getDate() - part.postProcessingDays);
+                productionDeadline = utils.formatDateToYMD(deadlineDate);
+            }
+            // =============================================================
+
+            if (part.batches && part.batches.length > 0) {
+                part.batches.forEach(batch => {
+                    items.push({
+                        ...batch,
+                        id: batch.batchId,
+                        isUrgent: order.isUrgent,
+                        customer: order.customer,
+                        partName: part.partName,
+                        materialStatus: part.materialStatus,
+                        parentId: part.id,
+                        orderId: order.id,
+                        productionDeadline: batch.deadline || productionDeadline // Gebruik batch-specifieke deadline indien aanwezig
+                    });
+                });
+            } else {
+                items.push({
+                    ...part,
+                    isUrgent: order.isUrgent,
+                    customer: order.customer,
+                    orderId: order.id,
+                    productionDeadline: productionDeadline
+                });
+            }
+        });
+    });
+    return items;
+}
+
+
+/**
+ * Zoekt een specifiek bovenliggend onderdeel.
+ * @param {string} partId - De ID van het onderdeel.
+ * @returns {object|null}
  */
 export function findPart(partId) {
     for (const order of state.orders) {
-        const foundPart = order.parts.find(p => p.id === partId);
-        if (foundPart) return foundPart;
+        // Voeg een check toe om 'null' waarden in de parts-array te negeren
+        if (order.parts && Array.isArray(order.parts)) {
+            const foundPart = order.parts.find(p => p && p.id === partId);
+            if (foundPart) return foundPart;
+        }
+    }
+    return null;
+}
+
+/**
+ * Zoekt een specifieke batch.
+ * @param {string} batchId - De ID van de batch.
+ * @returns {{part: object, batch: object}|null}
+ */
+export function findBatch(batchId) {
+    for (const order of state.orders) {
+        for (const part of order.parts) {
+            if (part.batches && Array.isArray(part.batches)) {
+                const foundBatch = part.batches.find(b => b.batchId === batchId);
+                if (foundBatch) {
+                    return { part, batch: foundBatch };
+                }
+            }
+        }
     }
     return null;
 }

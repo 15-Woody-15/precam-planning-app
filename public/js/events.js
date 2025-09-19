@@ -1,31 +1,202 @@
-import { state, findPart } from './state.js';
+import { state, findPart, findBatch, saveStateToLocalStorage } from './state.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import * as utils from './utils.js';
 import * as absences from './absences.js';
 import * as schedule from './schedule.js';
+import { handleUpdateOrder } from './main.js';
+import { findItemContext } from './utils.js';
+const { domElements } = ui;
 
-// Importeren van de nieuwe, opgesplitste event listener initializers
 import { initializeOrderListEventListeners } from './orderListEvents.js';
 import { initializePlanningGridEventListeners } from './planningGridEvents.js';
 
 export function initializeEventListeners() {
-    // --- Initialiseer de complexe, opgesplitste listeners ---
     initializeOrderListEventListeners();
     initializePlanningGridEventListeners();
 
-    // --- De overgebleven, algemene listeners blijven hier ---
+    if (domElements.orderDetailsContent) {
+        
+        domElements.orderDetailsContent.addEventListener('dragstart', (e) => {
+            const row = e.target.closest('.draggable-row');
+            if (row && row.dataset.itemId) {
+                // =================== DIT IS DE NIEUWE LOGICA ===================
+                const itemText = row.querySelector('.part-name-display')?.textContent.trim() || 'Planning Item';
 
-    // --- ABSENCE MODAL LOGIC ---
+                // Maak een apart 'spook'-element aan dat de muis volgt
+                const dragPreview = document.createElement('div');
+                dragPreview.id = 'drag-preview';
+                dragPreview.className = 'drag-preview';
+                dragPreview.textContent = itemText;
+                document.body.appendChild(dragPreview);
+                
+                // Vertel de browser om dit spook-element te gebruiken
+                e.dataTransfer.setDragImage(dragPreview, 20, 10);
+                // ===============================================================
+
+                e.dataTransfer.setData('text/plain', row.dataset.itemId);
+                e.dataTransfer.effectAllowed = 'move';
+                
+                requestAnimationFrame(() => {
+                    domElements.orderDetailsModal.classList.add('hidden');
+                });
+            }
+        });
+
+        // We voegen de 'dragend' listener weer toe om de preview op te ruimen
+        domElements.orderDetailsContent.addEventListener('dragend', (e) => {
+            // Ruim het spook-element op
+            const dragPreview = document.getElementById('drag-preview');
+            if (dragPreview) {
+                dragPreview.remove();
+            }
+
+            const row = e.target.closest('.draggable-row');
+            if (row) {
+                row.classList.remove('dragging');
+            }
+            
+            if (e.dataTransfer.dropEffect === 'none') {
+                ui.renderAll();
+            }
+        });
+
+        domElements.orderDetailsContent.addEventListener('change', async (e) => {
+            const context = findItemContext(e.target);
+            if (!context) return;
+            const { item, order: parentOrder } = context;
+            
+            if (e.target.classList.contains('machine-select')) item.machine = e.target.value;
+            else if (e.target.classList.contains('start-date-input')) item.startDate = e.target.value;
+            else if (e.target.classList.contains('shift-select')) item.shift = parseInt(e.target.value);
+            
+            item.status = (item.machine && item.startDate) ? 'Scheduled' : 'To Be Planned';
+            
+            utils.showLoadingOverlay(ui.domElements.loadingOverlay);
+            try {
+                await api.updateOrderOnBackend(parentOrder.id, parentOrder);
+            } catch (error) {
+                utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error', ui.domElements.notificationContainer);
+            } finally {
+                ui.renderAll();
+                ui.openOrderDetailsModal(parentOrder.id);
+                utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
+            }
+        });
+
+        domElements.orderDetailsContent.addEventListener('click', async (e) => {
+            const target = e.target;
+            const context = findItemContext(target);
+            if (!context) return;
+            const { item, part: parentPart, order: parentOrder } = context;
+            
+            const durationCell = target.closest('.duration-cell');
+            if (durationCell && !durationCell.querySelector('input')) {
+                const itemToEdit = parentPart;
+                const originalValue = itemToEdit.productionTimePerPiece;
+                
+                durationCell.innerHTML = `<input type="number" step="0.01" class="w-20 text-center bg-white dark:bg-gray-700" value="${originalValue}" />`;
+                const input = durationCell.querySelector('input');
+                input.focus();
+                input.select();
+                
+                const saveChange = async () => {
+                    const newValue = parseFloat(input.value);
+                    if (!isNaN(newValue) && newValue >= 0 && newValue !== originalValue) {
+                        itemToEdit.productionTimePerPiece = newValue;
+                        if (itemToEdit.batches && itemToEdit.batches.length > 0) {
+                            itemToEdit.batches.forEach(b => { b.totalHours = (b.quantity * newValue) / 60; });
+                        }
+                        await api.updateOrderOnBackend(parentOrder.id, parentOrder);
+                    }
+                    ui.renderAll();
+                    ui.openOrderDetailsModal(parentOrder.id);
+                };
+
+                input.addEventListener('blur', saveChange);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') input.blur();
+                    if (e.key === 'Escape') {
+                        ui.renderAll();
+                        ui.openOrderDetailsModal(parentOrder.id);
+                    }
+                });
+                return;
+            }
+
+            let actionTaken = false;
+            if (e.target.classList.contains('unplan-btn')) {
+                item.machine = null;
+                item.startDate = null;
+                item.status = 'To Be Planned';
+                actionTaken = true;
+            } else if (e.target.classList.contains('toggle-status-btn')) {
+                item.status = item.status === 'Completed' ? 'Scheduled' : 'Completed';
+                actionTaken = true;
+            } else if (e.target.classList.contains('delete-btn')) {
+                const idToDelete = item.batchId || item.id;
+                const isBatch = !!item.batchId;
+                const message = isBatch ? `batch "${idToDelete}"` : `part "${idToDelete}"`;
+                
+                ui.openConfirmModal('Delete Item', `Are you sure you want to delete ${message}?`, async () => {
+                    if (isBatch) {
+                        parentPart.batches = parentPart.batches.filter(b => b.batchId !== idToDelete);
+                        if (parentPart.batches.length === 0) {
+                            parentOrder.parts = parentOrder.parts.filter(p => p.id !== parentPart.id);
+                        }
+                    } else {
+                        parentOrder.parts = parentOrder.parts.filter(p => p.id !== idToDelete);
+                    }
+                    
+                    if (parentOrder.parts.length === 0) {
+                        await api.deleteOrderOnBackend(parentOrder.id);
+                        state.orders = state.orders.filter(o => o.id !== parentOrder.id);
+                        domElements.orderDetailsModal.classList.add('hidden');
+                    } else {
+                        await api.updateOrderOnBackend(parentOrder.id, parentOrder);
+                        ui.openOrderDetailsModal(parentOrder.id);
+                    }
+                    ui.renderAll();
+                });
+                return;
+            }
+
+            if (actionTaken) {
+                utils.showLoadingOverlay(ui.domElements.loadingOverlay);
+                try {
+                    await api.updateOrderOnBackend(parentOrder.id, parentOrder);
+                } catch (error) {
+                    utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error');
+                } finally {
+                    ui.renderAll();
+                    ui.openOrderDetailsModal(parentOrder.id);
+                    utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
+                }
+            }
+        });
+    }
+    
+    if (domElements.closeOrderDetailsBtn) {
+        domElements.closeOrderDetailsBtn.addEventListener('click', () => {
+            domElements.orderDetailsModal.classList.add('hidden');
+        });
+    }
+    
+    if (domElements.closeOrderDetailsBtn) {
+        domElements.closeOrderDetailsBtn.addEventListener('click', () => {
+            domElements.orderDetailsModal.classList.add('hidden');
+        });
+    }
+
     if(ui.domElements.addAbsenceBtn) ui.domElements.addAbsenceBtn.addEventListener('click', ui.openAbsenceModal);
     if(ui.domElements.cancelAbsenceBtn) ui.domElements.cancelAbsenceBtn.addEventListener('click', ui.closeAbsenceModal);
     if(ui.domElements.addAbsenceForm) {
-        ui.domElements.addAbsenceForm.addEventListener('submit', (e) => {
+        ui.domElements.addAbsenceForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const reason = ui.domElements.absenceReason.value;
             const { absenceStartDate, absenceEndDate } = ui.getAbsenceDates();
             if (reason && absenceStartDate && absenceEndDate) {
-                absences.addAbsence({ 
+                await absences.addAbsence({ 
                     start: utils.formatDateToYMD(absenceStartDate), 
                     end: utils.formatDateToYMD(absenceEndDate), 
                     reason 
@@ -75,8 +246,8 @@ export function initializeEventListeners() {
                 ui.openConfirmModal(
                     'Delete Absence',
                     'Are you sure you want to delete this absence?',
-                    () => {
-                        absences.removeAbsence(absenceId);
+                    async () => {
+                        await absences.removeAbsence(absenceId);
                         utils.showNotification('Absence removed successfully.', 'success', ui.domElements.notificationContainer);
                         ui.renderAbsenceList();
                         ui.renderAll();
@@ -85,8 +256,19 @@ export function initializeEventListeners() {
             }
         });
     }
+
+    if (ui.domElements.editPartsContainer) {
+        ui.domElements.editPartsContainer.addEventListener('change', (e) => {
+            if (e.target.dataset.field === 'needsPostProcessing') {
+                const partEntry = e.target.closest('.part-entry');
+                const daysContainer = partEntry.querySelector('.post-processing-days-container');
+                if (daysContainer) {
+                    daysContainer.classList.toggle('hidden', !e.target.checked);
+                }
+            }
+        });
+    }
     
-    // --- THEME TOGGLE LOGIC ---
     const themeToggleCheckbox = document.getElementById('theme-toggle-checkbox');
     if (themeToggleCheckbox) {
         const applyTheme = (theme) => {
@@ -110,11 +292,10 @@ export function initializeEventListeners() {
         });
     }
 
-    // --- "ADD ORDER" & "EDIT ORDER" MODAL LOGIC ---
     if(ui.domElements.showNewOrderModalBtn) ui.domElements.showNewOrderModalBtn.addEventListener('click', () => {
         ui.domElements.addOrderForm.reset();
         ui.domElements.partsContainer.innerHTML = '';
-        ui.createNewPartForm();
+        ui.createNewPartForm(ui.domElements.partsContainer);
         ui.domElements.newOrderModal.classList.remove('hidden');
         document.getElementById('order-id').focus();
     });
@@ -124,28 +305,59 @@ export function initializeEventListeners() {
     });
     if(ui.domElements.addOrderForm) ui.domElements.addOrderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const mainOrderId = document.getElementById('order-id').value;
+        const mainOrderId = document.getElementById('order-id').value.trim();
         if (state.orders.some(o => o.id === mainOrderId)) {
             utils.showNotification('Order number already exists.', 'error', ui.domElements.notificationContainer);
             return;
         }
+        
         const newOrder = {
-            id: mainOrderId, customer: ui.domElements.customerSelect.value, customerOrderNr: document.getElementById('customer-order-nr').value, deadline: document.getElementById('deadline').value, isUrgent: document.getElementById('is-urgent').checked, parts: []
+            id: mainOrderId,
+            customer: ui.domElements.customerSelect.value,
+            customerOrderNr: document.getElementById('customer-order-nr').value,
+            deadline: document.getElementById('deadline').value,
+            isUrgent: document.getElementById('is-urgent').checked,
+            parts: []
         };
+        
         const partForms = ui.domElements.partsContainer.querySelectorAll('.part-entry');
+        
         partForms.forEach((partForm, index) => {
             const partId = `${mainOrderId}-${index + 1}`;
-            const productionTimeInMinutes = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value);
-            const quantity = parseInt(partForm.querySelector('[data-field="quantity"]').value);
+            const totalQuantity = parseInt(partForm.querySelector('[data-field="totalQuantity"]').value);
+            const prodTime = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value) || 1;
+            const batchesData = JSON.parse(partForm.dataset.batches);
+
             const newPart = {
-                id: partId, partName: partForm.querySelector('[data-field="partName"]').value, drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value, quantity: quantity, productionTimePerPiece: productionTimeInMinutes, materialStatus: partForm.querySelector('[data-field="materialInStock"]').checked ? 'Available' : 'Not Available', status: 'To Be Planned', machine: null, startDate: null, shift: 8, totalHours: (quantity * productionTimeInMinutes) / 60,
+                id: partId,
+                partName: partForm.querySelector('[data-field="partName"]').value,
+                drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value,
+                productionTimePerPiece: prodTime,
+                totalQuantity: totalQuantity,
+                materialStatus: partForm.querySelector('[data-field="materialInStock"]').checked ? 'Available' : 'Not Available',
+                needsPostProcessing: partForm.querySelector('[data-field="needsPostProcessing"]').checked,
+                postProcessingDays: parseInt(partForm.querySelector('[data-field="postProcessingDays"]').value) || 0,
+                batches: batchesData.map((batch, batchIndex) => {
+                    return {
+                        batchId: `${partId}-b${batchIndex + 1}`,
+                        quantity: batch.quantity,
+                        deadline: batch.deadline,
+                        totalHours: (batch.quantity * prodTime) / 60,
+                        status: 'To Be Planned',
+                        machine: null,
+                        startDate: null,
+                        shift: 8,
+                    };
+                })
             };
             newOrder.parts.push(newPart);
         });
+
         if (newOrder.parts.length === 0) {
             utils.showNotification("Please add at least one part to the order.", "error", ui.domElements.notificationContainer);
             return;
         }
+        
         utils.showLoadingOverlay(ui.domElements.loadingOverlay);
         try {
             await api.addOrderOnBackend(newOrder);
@@ -160,95 +372,147 @@ export function initializeEventListeners() {
             utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
         }
     });
-    if(ui.domElements.addPartBtn) ui.domElements.addPartBtn.addEventListener('click', ui.createNewPartForm);
+
+    if(ui.domElements.addPartBtn) ui.domElements.addPartBtn.addEventListener('click', () => {
+        // Haal de hoofd-deadline op en geef deze mee
+        const mainDeadline = document.getElementById('deadline').value;
+        ui.createNewPartForm(ui.domElements.partsContainer, mainDeadline);
+    });
+
+    const mainDeadlineInput = document.getElementById('deadline');
+    if (mainDeadlineInput) {
+        mainDeadlineInput.addEventListener('change', (event) => {
+            const newMainDeadline = event.target.value;
+            const partForms = ui.domElements.partsContainer.querySelectorAll('.part-entry');
+
+            partForms.forEach(partForm => {
+                try {
+                    const batchesData = JSON.parse(partForm.dataset.batches);
+                    // We updaten alleen de deadline van de eerste batch,
+                    // ervan uitgaande dat voor simpele onderdelen de hoofd-deadline leidend is.
+                    if (batchesData.length > 0) {
+                        batchesData[0].deadline = newMainDeadline;
+                    }
+                    partForm.dataset.batches = JSON.stringify(batchesData);
+                } catch (e) {
+                    console.error("Kon batches data niet parsen of updaten", e);
+                }
+            });
+        });
+    }
     
     if (ui.domElements.cancelEditBtn) ui.domElements.cancelEditBtn.addEventListener('click', () => {
         ui.domElements.editOrderModal.classList.add('hidden');
     });
 
     if (ui.domElements.addPartToEditBtn) ui.domElements.addPartToEditBtn.addEventListener('click', () => {
-        const orderId = ui.domElements.editOrderForm.dataset.editingOrderId;
-        if (!orderId) return;
-        const partDiv = document.createElement('div');
-        partDiv.className = 'edit-part-entry is-new grid grid-cols-1 md:grid-cols-4 gap-4 items-center border-l-4 border-green-400 p-2 rounded-md';
-        partDiv.innerHTML = `
-            <div><label class="block text-xs font-medium text-gray-500">Name</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="partName" placeholder="New part" required></div>
-            <div><label class="block text-xs font-medium text-gray-500">Drawing No.</label><input type="text" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="drawingNumber"></div>
-            <div><label class="block text-xs font-medium text-gray-500">Quantity</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="quantity" value="1" required></div>
-            <div><label class="block text-xs font-medium text-gray-500">Prod. (min/pc)</label><input type="number" class="bg-white mt-1 block w-full rounded-md border-gray-300 text-sm" data-field="productionTimePerPiece" value="1" required></div>
-        `;
-        ui.domElements.editPartsContainer.appendChild(partDiv);
-        partDiv.querySelector('input').focus();
+        ui.createNewPartForm(ui.domElements.editPartsContainer);
     });
 
-    if (ui.domElements.editOrderForm) ui.domElements.editOrderForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const originalOrderId = e.target.dataset.editingOrderId;
-        const orderToUpdate = state.orders.find(o => o.id === originalOrderId);
-        if (!orderToUpdate) {
-            utils.showNotification("Could not find the order to edit.", "error", ui.domElements.notificationContainer);
-            return;
-        }
-        const updatedOrderData = JSON.parse(JSON.stringify(orderToUpdate));
-        const newOrderId = document.getElementById('edit-order-id').value;
-        updatedOrderData.id = newOrderId;
-        updatedOrderData.customer = ui.domElements.editCustomerSelect.value;
-        updatedOrderData.customerOrderNr = document.getElementById('edit-customer-order-nr').value;
-        updatedOrderData.deadline = document.getElementById('edit-deadline').value;
-        let maxPartNumber = updatedOrderData.parts.reduce((max, p) => Math.max(max, parseInt(p.id.split('-').pop()) || 0), 0);
-        
-        const partForms = ui.domElements.editPartsContainer.querySelectorAll('.edit-part-entry');
-        partForms.forEach(partForm => {
-            const originalPartId = partForm.dataset.partId;
-            const partToUpdate = originalPartId ? updatedOrderData.parts.find(p => p.id === originalPartId) : null;
-            
-            if (partToUpdate) {
-                const newQuantity = parseInt(partForm.querySelector('[data-field="quantity"]').value);
-                const newProdTime = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value);
-                partToUpdate.partName = partForm.querySelector('[data-field="partName"]').value;
-                partToUpdate.drawingNumber = partForm.querySelector('[data-field="drawingNumber"]').value;
-                partToUpdate.quantity = newQuantity;
-                partToUpdate.productionTimePerPiece = newProdTime;
-                partToUpdate.totalHours = (newQuantity * newProdTime) / 60;
-                if (originalOrderId !== newOrderId) {
-                    const partIndex = originalPartId.split('-').pop();
-                    partToUpdate.id = `${newOrderId}-${partIndex}`;
+    if (ui.domElements.deleteOrderBtnInModal) {
+        ui.domElements.deleteOrderBtnInModal.addEventListener('click', () => {
+            const orderId = ui.domElements.editOrderForm.dataset.editingOrderId;
+            if (!orderId) {
+                utils.showNotification("Cannot find order to delete.", "error", ui.domElements.notificationContainer);
+                return;
+            }
+            ui.openConfirmModal(
+                'Delete Entire Order',
+                `Are you sure you want to permanently delete order "${orderId}" and all its parts? This cannot be undone.`,
+                async () => {
+                    utils.showLoadingOverlay(ui.domElements.loadingOverlay);
+                    try {
+                        await api.deleteOrderOnBackend(orderId);
+                        state.orders = state.orders.filter(o => o.id !== orderId);
+                        
+                        ui.domElements.editOrderModal.classList.add('hidden');
+                        ui.renderAll();
+                        utils.showNotification(`Order ${orderId} has been deleted.`, 'success', ui.domElements.notificationContainer);
+                    } catch (error) {
+                        utils.showNotification(`Could not delete order: ${error.message}`, 'error', ui.domElements.notificationContainer);
+                    } finally {
+                        utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
+                    }
                 }
-            } else if (partForm.classList.contains('is-new')) {
-                maxPartNumber++;
-                const newPartId = `${newOrderId}-${maxPartNumber}`;
-                const newQuantity = parseInt(partForm.querySelector('[data-field="quantity"]').value);
-                const newProdTime = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value);
-                const newPart = {
-                    id: newPartId, partName: partForm.querySelector('[data-field="partName"]').value, drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value, quantity: newQuantity, productionTimePerPiece: newProdTime, totalHours: (newQuantity * newProdTime) / 60, materialStatus: 'Not Available', status: 'To Be Planned', machine: null, startDate: null, shift: 8,
-                };
-                updatedOrderData.parts.push(newPart);
+            );
+        });
+    }
+
+    const addSplitButtonListener = (container) => {
+        if (container) {
+            container.addEventListener('click', (e) => {
+                if (e.target.classList.contains('split-part-btn')) {
+                    const partFormEl = e.target.closest('.part-entry');
+                    if (partFormEl) {
+                        ui.openBatchSplitterModal(partFormEl);
+                    }
+                }
+            });
+        }
+    };
+    addSplitButtonListener(ui.domElements.partsContainer);
+    addSplitButtonListener(ui.domElements.editPartsContainer);
+
+    if (ui.domElements.batchListContainer) {
+        ui.domElements.batchListContainer.addEventListener('input', ui.updateBatchValidation);
+        ui.domElements.batchListContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-batch-btn')) {
+                e.target.closest('.batch-row').remove();
+                ui.updateBatchValidation();
             }
         });
-        utils.showLoadingOverlay(ui.domElements.loadingOverlay);
-        try {
-            await api.updateOrderOnBackend(originalOrderId, updatedOrderData);
-            const orderIndex = state.orders.findIndex(o => o.id === originalOrderId);
-            if (orderIndex !== -1) {
-                state.orders[orderIndex] = updatedOrderData;
-            }
-            ui.domElements.editOrderModal.classList.add('hidden');
-            ui.renderAll();
-            utils.showNotification(`Order ${newOrderId} saved successfully!`, 'success', ui.domElements.notificationContainer);
-        } catch (error) {
-            utils.showNotification(`Could not save changes: ${error.message}`, 'error', ui.domElements.notificationContainer);
-        } finally {
-            utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
-        }
-    });
+    }
 
-    // --- SEARCH & FILTER LOGIC ---
+    if(ui.domElements.addBatchRowBtn) {
+        ui.domElements.addBatchRowBtn.addEventListener('click', () => {
+            const batchRow = document.createElement('div');
+            batchRow.className = 'batch-row grid grid-cols-3 gap-4 items-center';
+            batchRow.innerHTML = `
+                <div class="col-span-1">
+                    <label class="block text-xs text-gray-500">Aantal</label>
+                    <input type="number" min="1" class="batch-quantity w-full border-gray-300 rounded-md" value="1">
+                </div>
+                <div class="col-span-1">
+                    <label class="block text-xs text-gray-500">Deadline (optioneel)</label>
+                    <input type="date" class="batch-deadline w-full border-gray-300 rounded-md" value="">
+                </div>
+                <div class="col-span-1 self-end">
+                    <button type="button" class="remove-batch-btn text-red-500 hover:text-red-700 text-sm">Verwijder</button>
+                </div>
+            `;
+            ui.domElements.batchListContainer.appendChild(batchRow);
+            ui.updateBatchValidation();
+        });
+    }
+
+    if(ui.domElements.cancelBatchesBtn) ui.domElements.cancelBatchesBtn.addEventListener('click', ui.closeBatchSplitterModal);
+
+    if(ui.domElements.saveBatchesBtn) {
+        ui.domElements.saveBatchesBtn.addEventListener('click', () => {
+            const currentPartForm = ui.getActivePartFormElement();
+            if (currentPartForm) {
+                const batchRows = ui.domElements.batchListContainer.querySelectorAll('.batch-row');
+                const batchesData = Array.from(batchRows).map(row => ({
+                    quantity: parseInt(row.querySelector('.batch-quantity').value),
+                    deadline: row.querySelector('.batch-deadline').value
+                }));
+                currentPartForm.dataset.batches = JSON.stringify(batchesData);
+                const splitBtn = currentPartForm.querySelector('.split-part-btn');
+                splitBtn.textContent = `Batches (${batchesData.length})`;
+                splitBtn.classList.add('font-bold', 'text-green-600');
+            }
+            ui.closeBatchSplitterModal();
+        });
+    }
+
     if(ui.domElements.searchKey) ui.domElements.searchKey.addEventListener('change', (e) => {
         state.searchKey = e.target.value;
+        saveStateToLocalStorage();
         ui.renderAll();
     });
     if(ui.domElements.searchInput) ui.domElements.searchInput.addEventListener('keyup', (e) => {
         state.searchTerm = e.target.value;
+        saveStateToLocalStorage();
         ui.renderAll();
     });
 
@@ -587,4 +851,6 @@ export function initializeEventListeners() {
             ui.closeConfirmModal();
         }
     });
+
+    domElements.saveOrderBtn.addEventListener('click', handleUpdateOrder);
 }

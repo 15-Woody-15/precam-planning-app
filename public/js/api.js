@@ -4,22 +4,28 @@ const API_URL = IS_LOCAL ? 'http://localhost:3000/api' : 'https://precam-plannin
 // --- ORDER FUNCTIES ---
 
 /**
- * Haalt alle initiële data (orders, klanten, machines) op van de server.
- * @returns {Promise<{orders: object[], customers: string[], machines: object[]}>} Een object met alle data.
+ * Haalt alle initiële data (orders, klanten, machines, afwezigheden) op van de server.
+ * @returns {Promise<{orders: object[], customers: string[], machines: object[], absences: object[]}>} Een object met alle data.
  */
 export async function fetchInitialData() {
-    const [ordersRes, customersRes, machinesRes] = await Promise.all([
+    // VOEG 'absencesRes' TOE AAN DE LIJST
+    const [ordersRes, customersRes, machinesRes, absencesRes] = await Promise.all([
         fetch(`${API_URL}/orders`),
         fetch(`${API_URL}/customers`),
-        fetch(`${API_URL}/machines`)
+        fetch(`${API_URL}/machines`), // VOEG EEN KOMMA TOE
+        fetch(`${API_URL}/absences`)
     ]);
-    if (!ordersRes.ok || !customersRes.ok || !machinesRes.ok) {
+    
+    // De check voor absencesRes is hier al correct
+    if (!ordersRes.ok || !customersRes.ok || !machinesRes.ok || !absencesRes.ok) {
         throw new Error('Could not load initial data from the server.');
     }
+
     return {
         orders: await ordersRes.json(),
         customers: await customersRes.json(),
-        machines: await machinesRes.json()
+        machines: await machinesRes.json(), // VOEG EEN KOMMA TOE
+        absences: await absencesRes.json()
     };
 }
 
@@ -183,4 +189,33 @@ export async function replaceMachinesOnBackend(machines) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(machines)
     });
     if (!response.ok) throw new Error('Could not replace machines.');
+}
+
+// --- ABSENCE FUNCTIES ---
+
+/**
+ * Voegt een nieuwe afwezigheid toe op de backend.
+ * @param {object} absence - De afwezigheid om op te slaan.
+ * @returns {Promise<object>} De opgeslagen afwezigheid data.
+ */
+export async function addAbsenceOnBackend(absence) {
+    const response = await fetch(`${API_URL}/absences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(absence),
+    });
+    if (!response.ok) throw new Error('Could not add absence.');
+    return await response.json();
+}
+
+/**
+ * Verwijdert een afwezigheid van de backend.
+ * @param {number} absenceId - De ID van de te verwijderen afwezigheid.
+ * @returns {Promise<void>}
+ */
+export async function deleteAbsenceOnBackend(absenceId) {
+    const response = await fetch(`${API_URL}/absences/${absenceId}`, {
+        method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Could not delete absence.');
 }

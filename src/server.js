@@ -43,6 +43,7 @@ async function initializeDatabase() {
     await client.query(`CREATE TABLE IF NOT EXISTS orders (id VARCHAR(255) PRIMARY KEY, order_data JSONB NOT NULL);`);
     await client.query(`CREATE TABLE IF NOT EXISTS customers (name VARCHAR(255) PRIMARY KEY);`);
     await client.query(`CREATE TABLE IF NOT EXISTS machines (name VARCHAR(255) PRIMARY KEY, has_robot BOOLEAN NOT NULL);`);
+    await client.query(`CREATE TABLE IF NOT EXISTS absences (id BIGSERIAL PRIMARY KEY, start_date DATE NOT NULL, end_date DATE NOT NULL, reason VARCHAR(255) NOT NULL);`);
     console.log("Database tables have been checked/created.");
   } catch (err) {
     console.error("Error initializing database:", err);
@@ -79,11 +80,21 @@ app.post('/api/orders', async (req, res) => {
 });
 
 app.put('/api/orders/:id', async (req, res) => {
-    const orderId = req.params.id;
+    const originalOrderId = req.params.id;
     const updatedOrderData = req.body;
+    const newOrderId = updatedOrderData.id;
+
     try {
-        const result = await pool.query('UPDATE orders SET order_data = $1 WHERE id = $2', [JSON.stringify(updatedOrderData), orderId]);
-        if (result.rowCount === 0) return res.status(404).json({ message: "Order not found" });
+        // Deze query update nu ZOWEL het ID als de data, wat de desync oplost.
+        const result = await pool.query(
+            'UPDATE orders SET id = $1, order_data = $2 WHERE id = $3', 
+            [newOrderId, JSON.stringify(updatedOrderData), originalOrderId]
+        );
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Order not found to update" });
+        }
+        
         res.json(updatedOrderData);
     } catch (err) {
         console.error("Error updating order:", err);
@@ -212,6 +223,52 @@ app.delete('/api/machines/:name', async (req, res) => {
         console.error("Error deleting machine:", err);
         res.status(500).json({ error: "Could not delete machine" });
     }
+});
+
+// --- ABSENCE ROUTES ---
+app.get('/api/absences', async (req, res) => {
+  try {
+    // GEBRUIK TO_CHAR OM HET DATUMFORMAAT TE GARANDEREN
+    const query = `
+      SELECT 
+        id, 
+        TO_CHAR(start_date, 'YYYY-MM-DD') AS start, 
+        TO_CHAR(end_date, 'YYYY-MM-DD') AS end, 
+        reason 
+      FROM absences 
+      ORDER BY start_date DESC
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching absences:", err);
+    res.status(500).json({ error: "Error fetching absences" });
+  }
+});
+
+app.post('/api/absences', async (req, res) => {
+    const { start, end, reason } = req.body;
+    try {
+        const result = await pool.query(
+            'INSERT INTO absences (start_date, end_date, reason) VALUES ($1, $2, $3) RETURNING id, start_date AS start, end_date AS end, reason',
+            [start, end, reason]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error("Error adding absence:", err);
+        res.status(500).json({ error: "Could not add absence" });
+    }
+});
+
+app.delete('/api/absences/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query('DELETE FROM absences WHERE id = $1', [id]);
+        res.status(204).send();
+    } catch (err) { // <-- CORRECTIE HIER
+        console.error("Error deleting absence:", err);
+        res.status(500).json({ error: "Could not delete absence" });
+    } // <-- CORRECTIE HIER
 });
 
 // Route to replace all customers

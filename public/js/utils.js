@@ -1,3 +1,28 @@
+// js/utils.js
+
+import { state, findPart, findBatch } from './state.js';
+
+export function findItemContext(targetElement) {
+    const dataElement = targetElement.closest('[data-batch-id], [data-part-id]');
+    if (!dataElement) return null;
+    const { batchId, partId } = dataElement.dataset;
+    let item, parentPart, parentOrder;
+    if (batchId) {
+        const found = findBatch(batchId);
+        if (!found) return null;
+        item = found.batch;
+        parentPart = found.part;
+        parentOrder = state.orders.find(o => o.parts.some(p => p && p.id === parentPart.id));
+    } else if (partId) {
+        item = findPart(partId);
+        if (!item) return null;
+        parentPart = item;
+        parentOrder = state.orders.find(o => o.parts.some(p => p && p.id === partId));
+    }
+    if (!item || !parentOrder) return null;
+    return { item, part: parentPart, order: parentOrder };
+}
+
 /**
  * Toont een laad-overlay op de pagina.
  * @param {HTMLElement} loadingOverlay - Het overlay-element dat getoond moet worden.
@@ -22,7 +47,6 @@ export function hideLoadingOverlay(loadingOverlay) {
 export const formatDateToYMD = (date) => {
     if (!date) return '';
     const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
     const year = d.getFullYear();
     const month = (d.getMonth() + 1).toString().padStart(2, '0');
     const day = d.getDate().toString().padStart(2, '0');
@@ -61,11 +85,11 @@ export function showNotification(message, type = 'success', container) {
 }
 
 /**
- * Haalt de totale productieduur in uren op van een onderdeel.
- * @param {object} part - Het onderdeel-object.
+ * Haalt de totale productieduur in uren op van een planbaar item (part of batch).
+ * @param {object} item - Het onderdeel- of batch-object.
  * @returns {number} De totale duur in uren.
  */
-export const getPartDuration = (part) => part.totalHours || 0;
+export const getPartDuration = (item) => item.totalHours || 0;
 
 /**
  * Creëert een "debounced" versie van een functie die pas wordt uitgevoerd na een bepaalde tijd van inactiviteit.
@@ -82,26 +106,20 @@ export function debounce(func, timeout = 750) {
 }
 
 /**
- * Controleert of alle onderdelen van een order de status 'Completed' hebben.
+ * Bepaalt de overkoepelende status van een order op basis van de status van de planbare items.
  * @param {object} order - Het order-object.
- * @returns {boolean} True als alle onderdelen voltooid zijn, anders false.
- */
-export function areAllPartsCompleted(order) {
-    if (!order.parts || order.parts.length === 0) {
-        return false;
-    }
-    return order.parts.every(part => part.status === 'Completed');
-}
-
-/**
- * Bepaalt de overkoepelende status van een order op basis van de status van de onderdelen.
- * @param {object} order - Het order-object.
- * @returns {string} De algemene orderstatus ('Empty', 'Completed', 'In Production', of 'To Be Planned').
+ * @returns {string} De algemene orderstatus.
  */
 export function getOverallOrderStatus(order) {
-     const partStatuses = order.parts.map(p => p.status);
-     if (partStatuses.length === 0) return 'Empty';
-     if (partStatuses.every(s => s === 'Completed')) return 'Completed';
-     if (partStatuses.some(s => s === 'Scheduled') || partStatuses.some(s => s === 'In Production')) return 'In Production';
-     return 'To Be Planned';
+    // Maakt een lijst van alle planbare items: batches als die er zijn, anders het onderdeel zelf.
+    const plannableItems = order.parts.flatMap(p => (p.batches && p.batches.length > 0) ? p.batches : [p]);
+    
+    if (plannableItems.length === 0) return 'Empty';
+
+    const statuses = plannableItems.map(item => item.status);
+    
+    if (statuses.every(s => s === 'Completed')) return 'Completed';
+    if (statuses.some(s => s === 'Scheduled' || s === 'In Production')) return 'In Production';
+    
+    return 'To Be Planned';
 }
