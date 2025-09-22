@@ -11,81 +11,175 @@ const { domElements } = ui;
 import { initializeOrderListEventListeners } from './orderListEvents.js';
 import { initializePlanningGridEventListeners } from './planningGridEvents.js';
 
+// js/events.js
+
 export function initializeEventListeners() {
     initializeOrderListEventListeners();
     initializePlanningGridEventListeners();
 
     if (domElements.orderDetailsContent) {
-        
+        let draggedItemElement = null;
+        let dragPreviewElement = null;
+
         domElements.orderDetailsContent.addEventListener('dragstart', (e) => {
-            const row = e.target.closest('.draggable-row');
-            if (row && row.dataset.itemId) {
-                // =================== DIT IS DE NIEUWE LOGICA ===================
-                const itemText = row.querySelector('.part-name-display')?.textContent.trim() || 'Planning Item';
+            const target = e.target;
+            if (!target.classList.contains('draggable-row')) {
+                e.preventDefault();
+                return;
+            }
+            draggedItemElement = target;
+            const context = findItemContext(target);
 
-                // Maak een apart 'spook'-element aan dat de muis volgt
-                const dragPreview = document.createElement('div');
-                dragPreview.id = 'drag-preview';
-                dragPreview.className = 'drag-preview';
-                dragPreview.textContent = itemText;
-                document.body.appendChild(dragPreview);
-                
-                // Vertel de browser om dit spook-element te gebruiken
-                e.dataTransfer.setDragImage(dragPreview, 20, 10);
-                // ===============================================================
-
-                e.dataTransfer.setData('text/plain', row.dataset.itemId);
+            if (context && context.item) {
+                const itemId = context.item.batchId || context.item.id;
+                e.dataTransfer.setData('text/plain', itemId);
                 e.dataTransfer.effectAllowed = 'move';
-                
-                requestAnimationFrame(() => {
+
+                dragPreviewElement = document.createElement('div');
+                dragPreviewElement.className = 'drag-preview';
+                dragPreviewElement.textContent = `${context.part.partName} (${itemId})`;
+                document.body.appendChild(dragPreviewElement);
+                e.dataTransfer.setDragImage(dragPreviewElement, 20, 20);
+
+                setTimeout(() => {
                     domElements.orderDetailsModal.classList.add('hidden');
-                });
+                    document.body.classList.remove('no-scroll');
+                    if (draggedItemElement) draggedItemElement.classList.add('dragging');
+                }, 0);
             }
         });
 
-        // We voegen de 'dragend' listener weer toe om de preview op te ruimen
         domElements.orderDetailsContent.addEventListener('dragend', (e) => {
-            // Ruim het spook-element op
-            const dragPreview = document.getElementById('drag-preview');
-            if (dragPreview) {
-                dragPreview.remove();
+            if (draggedItemElement) {
+                draggedItemElement.classList.remove('dragging');
+                draggedItemElement = null;
             }
-
-            const row = e.target.closest('.draggable-row');
-            if (row) {
-                row.classList.remove('dragging');
-            }
-            
-            if (e.dataTransfer.dropEffect === 'none') {
-                ui.renderAll();
+            if (dragPreviewElement) {
+                dragPreviewElement.remove();
+                dragPreviewElement = null;
             }
         });
 
         domElements.orderDetailsContent.addEventListener('change', async (e) => {
-            const context = findItemContext(e.target);
+            const target = e.target;
+            const context = findItemContext(target);
             if (!context) return;
+            
             const { item, order: parentOrder } = context;
+            const row = target.closest('tr');
+            if (!row) return;
+
+            let shouldUpdateAndRender = false;
+
+            // NIEUW: Sla wijzigingen in de materiaalstatus op
+            if (target.classList.contains('material-status-select')) {
+                item.materialStatus = target.value;
+                shouldUpdateAndRender = true;
+            }
+
+            if (target.classList.contains('shift-select')) {
+                item.shift = parseInt(target.value, 10);
+                shouldUpdateAndRender = true;
+            }
+
+            if (target.classList.contains('start-date-input')) {
+                item.startDate = target.value;
+                item.status = item.machine ? 'Scheduled' : 'To Be Planned';
+                shouldUpdateAndRender = true;
+            }
+
+            if (target.classList.contains('machine-select')) {
+                item.machine = target.value;
+                item.status = item.machine ? 'Scheduled' : 'To Be Planned';
+                // Herteken de modal direct om de shift-opties bij te werken
+                renderOrderDetails(parentOrder);
+                shouldUpdateAndRender = true;
+            }
             
-            if (e.target.classList.contains('machine-select')) item.machine = e.target.value;
-            else if (e.target.classList.contains('start-date-input')) item.startDate = e.target.value;
-            else if (e.target.classList.contains('shift-select')) item.shift = parseInt(e.target.value);
-            
-            item.status = (item.machine && item.startDate) ? 'Scheduled' : 'To Be Planned';
-            
-            utils.showLoadingOverlay(ui.domElements.loadingOverlay);
-            try {
-                await api.updateOrderOnBackend(parentOrder.id, parentOrder);
-            } catch (error) {
-                utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error', ui.domElements.notificationContainer);
-            } finally {
-                ui.renderAll();
-                ui.openOrderDetailsModal(parentOrder.id);
-                utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
+            if (shouldUpdateAndRender) {
+                utils.showLoadingOverlay(ui.domElements.loadingOverlay);
+                try {
+                    await api.updateOrderOnBackend(parentOrder.id, parentOrder);
+                    // Herteken alles om de visuele planning en de samenvattings-iconen bij te werken
+                    renderAll();
+                    openOrderDetailsModal(parentOrder.id); 
+                    utils.showNotification('Planning bijgewerkt.', 'success', ui.domElements.notificationContainer);
+                } catch (error) {
+                    utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error', ui.domElements.notificationContainer);
+                } finally {
+                    utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
+                }
             }
         });
 
         domElements.orderDetailsContent.addEventListener('click', async (e) => {
+            e.preventDefault();
             const target = e.target;
+
+            const actionDropdownToggle = target.closest('.toggle-action-dropdown');
+            if (actionDropdownToggle) {
+                const menu = actionDropdownToggle.nextElementSibling;
+                if (!menu) return;
+                const isAlreadyVisible = !menu.classList.contains('hidden');
+                document.querySelectorAll('.action-menu').forEach(m => {
+                    if (m !== menu) m.classList.add('hidden');
+                });
+                if (isAlreadyVisible) {
+                    menu.classList.add('hidden');
+                    return;
+                }
+                menu.style.visibility = 'hidden';
+                menu.classList.remove('hidden');
+                const menuHeight = menu.offsetHeight;
+                menu.classList.add('hidden');
+                menu.style.visibility = '';
+                const container = domElements.orderDetailsContent;
+                const buttonRect = actionDropdownToggle.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                // Bereken de positie van de knop vanaf de bovenkant van de scrollbare container
+                const buttonTopInContainer = buttonRect.top - containerRect.top;
+
+                // Bereken de totale hoogte die de content ZOU hebben als het menu naar beneden opent
+                const requiredHeight = buttonTopInContainer + actionDropdownToggle.offsetHeight + menuHeight;
+
+                // Bereken de ruimte die beschikbaar is boven de knop
+                const spaceAvailableAbove = buttonTopInContainer;
+
+                // Reset de classes
+                menu.classList.remove('bottom-full', 'mb-2', 'top-full');
+
+                // De beslissing:
+                // Als de benodigde hoogte MEER is dan de zichtbare hoogte van de container,
+                // EN er is genoeg ruimte boven de knop voor het menu, open dan naar boven.
+                console.log({ requiredHeight, clientHeight: container.clientHeight, spaceAvailableAbove, menuHeight });
+                if (requiredHeight > container.clientHeight && spaceAvailableAbove > menuHeight) {
+                    menu.classList.add('bottom-full', 'mb-2');
+                } else {
+                    // In alle andere gevallen, open naar beneden.
+                    menu.classList.add('top-full');
+                }
+
+                menu.classList.remove('hidden');
+                return;
+            }
+
+            if (!target.closest('.action-dropdown')) {
+                document.querySelectorAll('.action-menu').forEach(m => m.classList.add('hidden'));
+            }
+
+            const headerRow = target.closest('.part-header-row');
+            if (headerRow) {
+                const partId = headerRow.dataset.partId;
+                if (partId) {
+                    const batchRows = domElements.orderDetailsContent.querySelectorAll(`tr[data-parent-part-id="${partId}"]`);
+                    batchRows.forEach(row => row.classList.toggle('hidden'));
+                    const arrow = headerRow.querySelector('.toggle-arrow');
+                    if (arrow) arrow.classList.toggle('rotate-180');
+                }
+                return; 
+            }
+
             const context = findItemContext(target);
             if (!context) return;
             const { item, part: parentPart, order: parentOrder } = context;
@@ -125,20 +219,22 @@ export function initializeEventListeners() {
             }
 
             let actionTaken = false;
-            if (e.target.classList.contains('unplan-btn')) {
+            const deleteBtn = target.closest('.delete-btn-in-details'); 
+
+            if (target.classList.contains('unplan-btn')) {
                 item.machine = null;
                 item.startDate = null;
                 item.status = 'To Be Planned';
                 actionTaken = true;
-            } else if (e.target.classList.contains('toggle-status-btn')) {
+            } else if (target.classList.contains('toggle-status-btn')) {
                 item.status = item.status === 'Completed' ? 'Scheduled' : 'Completed';
                 actionTaken = true;
-            } else if (e.target.classList.contains('delete-btn')) {
+            } else if (deleteBtn) {
                 const idToDelete = item.batchId || item.id;
                 const isBatch = !!item.batchId;
-                const message = isBatch ? `batch "${idToDelete}"` : `part "${idToDelete}"`;
+                const message = isBatch ? `batch "${idToDelete}"` : `onderdeel "${idToDelete}"`;
                 
-                ui.openConfirmModal('Delete Item', `Are you sure you want to delete ${message}?`, async () => {
+                ui.openConfirmModal('Item Verwijderen', `Weet je zeker dat je ${message} wilt verwijderen?`, async () => {
                     if (isBatch) {
                         parentPart.batches = parentPart.batches.filter(b => b.batchId !== idToDelete);
                         if (parentPart.batches.length === 0) {
@@ -152,6 +248,7 @@ export function initializeEventListeners() {
                         await api.deleteOrderOnBackend(parentOrder.id);
                         state.orders = state.orders.filter(o => o.id !== parentOrder.id);
                         domElements.orderDetailsModal.classList.add('hidden');
+                        document.body.classList.remove('no-scroll');
                     } else {
                         await api.updateOrderOnBackend(parentOrder.id, parentOrder);
                         ui.openOrderDetailsModal(parentOrder.id);
@@ -165,25 +262,71 @@ export function initializeEventListeners() {
                 utils.showLoadingOverlay(ui.domElements.loadingOverlay);
                 try {
                     await api.updateOrderOnBackend(parentOrder.id, parentOrder);
+                    ui.renderAll();
+                    ui.openOrderDetailsModal(parentOrder.id);
                 } catch (error) {
                     utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error');
                 } finally {
-                    ui.renderAll();
-                    ui.openOrderDetailsModal(parentOrder.id);
                     utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
                 }
+            }
+
+            const editablePieceTime = target.closest('.editable-piece-time');
+            if (editablePieceTime) {
+                e.stopPropagation(); // Voorkom dat de rij in/uitklapt
+                const partId = target.closest('.part-header-row').dataset.partId;
+                const part = findPart(partId);
+                if (!part) return;
+
+                const originalValue = part.productionTimePerPiece;
+                const parentCell = editablePieceTime.parentElement;
+                
+                parentCell.innerHTML = `
+                    Stuktijd: 
+                    <input type="number" step="0.01" class="w-20 text-center bg-white dark:bg-gray-700 border rounded" value="${originalValue}" /> 
+                    min/st
+                `;
+                const input = parentCell.querySelector('input');
+                input.focus();
+                input.select();
+                
+                const saveChange = async () => {
+                    const newValue = parseFloat(input.value);
+                    if (!isNaN(newValue) && newValue >= 0 && newValue !== originalValue) {
+                        part.productionTimePerPiece = newValue;
+                        // Herbereken de uren voor alle batches van dit onderdeel
+                        if (part.batches) {
+                            part.batches.forEach(b => { 
+                                b.totalHours = (b.quantity * newValue) / 60; 
+                            });
+                        }
+                        const order = state.orders.find(o => o.parts.some(p => p.id === partId));
+                        if (order) {
+                            await api.updateOrderOnBackend(order.id, order);
+                        }
+                    }
+                    // Herlaad alles om de wijzigingen overal door te voeren
+                    renderAll();
+                    openOrderDetailsModal(part.orderId);
+                };
+
+                input.addEventListener('blur', saveChange);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') input.blur();
+                    if (e.key === 'Escape') {
+                        const order = state.orders.find(o => o.parts.some(p => p.id === partId));
+                        if(order) openOrderDetailsModal(order.id);
+            
+                }
+                });
+                return; // Stop verdere event-verwerking
             }
         });
     }
     
     if (domElements.closeOrderDetailsBtn) {
         domElements.closeOrderDetailsBtn.addEventListener('click', () => {
-            domElements.orderDetailsModal.classList.add('hidden');
-        });
-    }
-    
-    if (domElements.closeOrderDetailsBtn) {
-        domElements.closeOrderDetailsBtn.addEventListener('click', () => {
+            document.body.classList.remove('no-scroll');
             domElements.orderDetailsModal.classList.add('hidden');
         });
     }
@@ -283,7 +426,6 @@ export function initializeEventListeners() {
         const savedTheme = localStorage.getItem('theme');
         const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (savedTheme) { applyTheme(savedTheme); }
-        else if (systemPrefersDark) { applyTheme('dark'); }
         else { applyTheme('light'); }
         themeToggleCheckbox.addEventListener('change', () => {
             const newTheme = themeToggleCheckbox.checked ? 'dark' : 'light';
@@ -304,77 +446,80 @@ export function initializeEventListeners() {
         if (e.target.id === 'new-order-modal') ui.domElements.newOrderModal.classList.add('hidden');
     });
     if(ui.domElements.addOrderForm) ui.domElements.addOrderForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const mainOrderId = document.getElementById('order-id').value.trim();
-        if (state.orders.some(o => o.id === mainOrderId)) {
-            utils.showNotification('Order number already exists.', 'error', ui.domElements.notificationContainer);
-            return;
-        }
-        
-        const newOrder = {
-            id: mainOrderId,
-            customer: ui.domElements.customerSelect.value,
-            customerOrderNr: document.getElementById('customer-order-nr').value,
-            deadline: document.getElementById('deadline').value,
-            isUrgent: document.getElementById('is-urgent').checked,
-            parts: []
+    e.preventDefault();
+    const mainOrderId = document.getElementById('order-id').value.trim();
+    if (state.orders.some(o => o.id === mainOrderId)) {
+        utils.showNotification('Order number already exists.', 'error', ui.domElements.notificationContainer);
+        return;
+    }
+    
+    const newOrder = {
+        id: mainOrderId,
+        customer: ui.domElements.customerSelect.value,
+        customerOrderNr: document.getElementById('customer-order-nr').value,
+        deadline: document.getElementById('deadline').value,
+        isUrgent: document.getElementById('is-urgent').checked,
+        parts: []
+    };
+    
+    const partForms = ui.domElements.partsContainer.querySelectorAll('.part-entry');
+    
+    partForms.forEach((partForm, index) => {
+        const partId = `${mainOrderId}-${index + 1}`;
+        const totalQuantity = parseInt(partForm.querySelector('[data-field="totalQuantity"]').value);
+        const prodTime = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value) || 1;
+        const batchesData = JSON.parse(partForm.dataset.batches);
+
+        // --- DE FIX: Bereken de materiaalstatus hier, vóórdat het 'newPart' object wordt aangemaakt ---
+        const materialStatus = partForm.querySelector('[data-field="materialInStock"]').checked ? 'Available' : 'Not Available';
+
+        const newPart = {
+            id: partId,
+            partName: partForm.querySelector('[data-field="partName"]').value,
+            drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value,
+            productionTimePerPiece: prodTime,
+            totalQuantity: totalQuantity,
+            materialStatus: materialStatus, // Gebruik de berekende status
+            needsPostProcessing: partForm.querySelector('[data-field="needsPostProcessing"]').checked,
+            postProcessingDays: parseInt(partForm.querySelector('[data-field="postProcessingDays"]').value) || 0,
+            batches: batchesData.map((batch, batchIndex) => {
+                return {
+                    batchId: `${partId}-b${batchIndex + 1}`,
+                    quantity: batch.quantity,
+                    deadline: batch.deadline,
+                    totalHours: (batch.quantity * prodTime) / 60,
+                    status: 'To Be Planned',
+                    materialStatus: materialStatus, // Gebruik hier ook de berekende status
+                    machine: null,
+                    startDate: null,
+                    shift: 8,
+                };
+            })
         };
-        
-        const partForms = ui.domElements.partsContainer.querySelectorAll('.part-entry');
-        
-        partForms.forEach((partForm, index) => {
-            const partId = `${mainOrderId}-${index + 1}`;
-            const totalQuantity = parseInt(partForm.querySelector('[data-field="totalQuantity"]').value);
-            const prodTime = parseFloat(partForm.querySelector('[data-field="productionTimePerPiece"]').value) || 1;
-            const batchesData = JSON.parse(partForm.dataset.batches);
-
-            const newPart = {
-                id: partId,
-                partName: partForm.querySelector('[data-field="partName"]').value,
-                drawingNumber: partForm.querySelector('[data-field="drawingNumber"]').value,
-                productionTimePerPiece: prodTime,
-                totalQuantity: totalQuantity,
-                materialStatus: partForm.querySelector('[data-field="materialInStock"]').checked ? 'Available' : 'Not Available',
-                needsPostProcessing: partForm.querySelector('[data-field="needsPostProcessing"]').checked,
-                postProcessingDays: parseInt(partForm.querySelector('[data-field="postProcessingDays"]').value) || 0,
-                batches: batchesData.map((batch, batchIndex) => {
-                    return {
-                        batchId: `${partId}-b${batchIndex + 1}`,
-                        quantity: batch.quantity,
-                        deadline: batch.deadline,
-                        totalHours: (batch.quantity * prodTime) / 60,
-                        status: 'To Be Planned',
-                        machine: null,
-                        startDate: null,
-                        shift: 8,
-                    };
-                })
-            };
-            newOrder.parts.push(newPart);
-        });
-
-        if (newOrder.parts.length === 0) {
-            utils.showNotification("Please add at least one part to the order.", "error", ui.domElements.notificationContainer);
-            return;
-        }
-        
-        utils.showLoadingOverlay(ui.domElements.loadingOverlay);
-        try {
-            await api.addOrderOnBackend(newOrder);
-            state.orders.push(newOrder);
-            ui.domElements.newOrderModal.classList.add('hidden');
-            ui.renderAll();
-            utils.showNotification(`Order ${newOrder.id} saved successfully!`, 'success', ui.domElements.notificationContainer);
-        } catch (error) {
-            console.error("Error saving to server:", error);
-            utils.showNotification(`Could not save order: ${error.message}`, "error", ui.domElements.notificationContainer);
-        } finally {
-            utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
-        }
+        newOrder.parts.push(newPart);
     });
 
+    if (newOrder.parts.length === 0) {
+        utils.showNotification("Please add at least one part to the order.", "error", ui.domElements.notificationContainer);
+        return;
+    }
+    
+    utils.showLoadingOverlay(ui.domElements.loadingOverlay);
+    try {
+        await api.addOrderOnBackend(newOrder);
+        state.orders.push(newOrder);
+        ui.domElements.newOrderModal.classList.add('hidden');
+        ui.renderAll();
+        utils.showNotification(`Order ${newOrder.id} saved successfully!`, 'success', ui.domElements.notificationContainer);
+    } catch (error) {
+        console.error("Error saving to server:", error);
+        utils.showNotification(`Could not save order: ${error.message}`, "error", ui.domElements.notificationContainer);
+    } finally {
+        utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
+    }
+});
+    
     if(ui.domElements.addPartBtn) ui.domElements.addPartBtn.addEventListener('click', () => {
-        // Haal de hoofd-deadline op en geef deze mee
         const mainDeadline = document.getElementById('deadline').value;
         ui.createNewPartForm(ui.domElements.partsContainer, mainDeadline);
     });
@@ -388,8 +533,6 @@ export function initializeEventListeners() {
             partForms.forEach(partForm => {
                 try {
                     const batchesData = JSON.parse(partForm.dataset.batches);
-                    // We updaten alleen de deadline van de eerste batch,
-                    // ervan uitgaande dat voor simpele onderdelen de hoofd-deadline leidend is.
                     if (batchesData.length > 0) {
                         batchesData[0].deadline = newMainDeadline;
                     }

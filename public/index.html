@@ -85,16 +85,13 @@
                 <table id="order-table" class="min-w-full">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase sortable-header w-2/12" data-sort-key="id">Order / Part</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Material</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase sortable-header" data-sort-key="id">Order</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Klant</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Onderdelen</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Totale Duur</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase sortable-header" data-sort-key="deadline">Deadline</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Machine</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shift</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start Date</th>
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acties</th>
                         </tr>
                     </thead>
                     <tbody id="order-list" class="bg-white divide-y divide-gray-200"></tbody>
@@ -119,7 +116,7 @@
         </section>
 
         <div id="order-details-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-40">
-            <div class="relative top-20 mx-auto p-5 border w-full max-w-6xl shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div class="relative top-20 mx-auto p-5 border w-full max-w-7xl shadow-lg rounded-md bg-white dark:bg-gray-800">
                 <div class="flex justify-between items-center border-b pb-3">
                     <h3 class="text-2xl font-bold">Order Details: <span id="details-order-id" class="font-mono"></span></h3>
                     <button id="close-order-details-btn" class="text-2xl font-bold">&times;</button>
@@ -129,6 +126,12 @@
                         </div>
                 </div>
             </div>
+        </div>
+
+        <div id="trash-can-dropzone" class="hidden fixed bottom-8 right-8 z-[100] p-6 bg-red-600 text-white rounded-full shadow-lg transition-all duration-300 ease-in-out cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" />
+            </svg>
         </div>
     </main>
 

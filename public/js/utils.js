@@ -123,3 +123,23 @@ export function getOverallOrderStatus(order) {
     
     return 'To Be Planned';
 }
+
+export function findItemContextById(itemId) {
+    for (const order of state.orders) {
+        for (const part of order.parts) {
+            // Check for legacy parts without batches
+            if (part.id === itemId && (!part.batches || part.batches.length === 0)) {
+                return { order, part, item: part };
+            }
+            // Check batches
+            if (part.batches) {
+                for (const batch of part.batches) {
+                    if (batch.batchId === itemId) {
+                        return { order, part, item: batch };
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}

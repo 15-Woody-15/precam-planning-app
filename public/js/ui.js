@@ -37,7 +37,8 @@ export function initializeDOMElements() {
         'cancel-absence-btn', 'manage-absences-btn', 'manage-absences-modal', 'absence-list',
         'batch-splitter-modal', 'cancel-batches-btn', 'total-quantity-display', 'remaining-quantity-display',
         'batch-list-container', 'add-batch-row-btn', 'batch-validation-msg', 'save-batches-btn',
-        'order-details-modal', 'close-order-details-btn', 'details-order-id', 'order-details-content'
+        'order-details-modal', 'close-order-details-btn', 'details-order-id', 'order-details-content',
+        'trash-can-dropzone'
     ];
     ids.forEach(id => {
         const camelCaseId = id.replace(/-([a-z])/g, g => g[1].toUpperCase());
@@ -139,8 +140,17 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
     const deadlineMissedIcon = `<svg class="inline-block h-5 w-5 text-red-600" title="Deadline will be missed!" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5H10.75V5z" clip-rule="evenodd" /></svg>`;
     
     sortedOrders.forEach(order => {
+        // --- FIX: BEREKEN overallStatus AAN HET BEGIN ---
+        const overallStatus = utils.getOverallOrderStatus(order);
+
         const groupTr = document.createElement('tr');
-        groupTr.className = `order-group-row ${order.isUrgent ? 'urgent' : ''} cursor-pointer`;
+        
+        // Pas de class aan op basis van de status
+        let rowClass = `order-group-row ${order.isUrgent ? 'urgent' : ''} cursor-pointer`;
+        if (overallStatus === 'To Be Planned') {
+            rowClass += ' bg-blue-50 dark:bg-blue-900/20';
+        }
+        groupTr.className = rowClass;
         groupTr.dataset.orderId = order.id;
         
         const plannableItemsForOrder = order.parts.flatMap(p => (p.batches && p.batches.length > 0) ? p.batches : [p]);
@@ -149,12 +159,25 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
         const totalOrderHours = plannableItemsForOrder.reduce((sum, item) => sum + (item.totalHours || 0), 0);
         const orderHasDelayedParts = itemIds.some(id => partScheduleInfo.get(id)?.isDelayed);
         const willMissDeadline = deadlineInfo.get(order.id);
+
+        // Voeg een gekleurde rand toe bij conflicten of vertraging
+        if (orderHasConflict) {
+            groupTr.style.borderLeft = '4px solid #ef4444'; // Rood voor conflict
+        } else if (orderHasDelayedParts) {
+            groupTr.style.borderLeft = '4px solid #f59e0b'; // Amber voor vertraging
+        }
+        
+        // De rest van de code voor het opbouwen van de rij
         const deadlineDate = new Date(order.deadline + 'T00:00:00');
         const deadlineText = deadlineDate.toLocaleDateString('en-GB');
-        const overallStatus = utils.getOverallOrderStatus(order);
-
+        
         let deadlineSpan = `<span>${deadlineText}</span>`;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const oneWeekFromNow = new Date();
+        oneWeekFromNow.setDate(today.getDate() + 7);
         const isUpcomingInNext7Days = deadlineDate >= today && deadlineDate <= oneWeekFromNow;
+
         if (willMissDeadline) {
             deadlineSpan = `<span class="bg-red-500 text-white px-2 py-1 rounded-full font-bold">${deadlineText}</span>`;
         } else if (isUpcomingInNext7Days) {
@@ -171,26 +194,32 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
         }
 
         groupTr.innerHTML = `
-             <td class="px-3 py-3 whitespace-nowrap" title="Customer Order No: ${order.customerOrderNr || ''}">
+            <td class="px-3 py-3 whitespace-nowrap">
                 <div class="flex items-center">
                     <input type="checkbox" title="Urgent Order" class="toggle-urgent-btn h-4 w-4 rounded border-gray-300 text-indigo-600 mr-3" data-order-id="${order.id}" ${order.isUrgent ? 'checked' : ''}>
-                    ${order.isUrgent ? '<span class="mr-2" title="Urgent Order">🔥</span>' : ''}
-                    ${willMissDeadline ? `<div class="mr-2">${deadlineMissedIcon}</div>` : ''}
-                    ${orderHasConflict ? `<div class="mr-2">${conflictIcon}</div>` : ''}
-                    ${orderHasDelayedParts ? `<div class="mr-2">${delayedIcon}</div>` : ''}
-                    <div><span class="font-bold">${order.id}</span><span class="font-normal text-gray-600"> (${order.customer})</span></div>
+                    <div>
+                        ${order.isUrgent ? '<span class="mr-2" title="Urgent Order">🔥</span>' : ''}
+                        ${willMissDeadline ? `<span class="mr-2">${deadlineMissedIcon}</span>` : ''}
+                        ${orderHasConflict ? `<span class="mr-2">${conflictIcon}</span>` : ''}
+                        ${orderHasDelayedParts ? `<span class="mr-2">${delayedIcon}</span>` : ''}
+                        <span class="font-bold">${order.id}</span>
+                    </div>
                 </div>
             </td>
-            <td class="px-3 py-3 text-sm font-semibold">${totalOrderHours.toFixed(1)} hrs</td>
-            <td colspan="2"></td>
+            <td class="px-3 py-3 whitespace-nowrap">
+                <div class="font-medium">${order.customer}</div>
+                <div class="text-xs text-gray-500">${order.customerOrderNr || ''}</div>
+            </td>
+            <td class="px-3 py-3 text-sm">${order.parts.length}</td>
+            <td class="px-3 py-3 text-sm font-semibold">${totalOrderHours.toFixed(1)} uur</td>
             <td class="px-3 py-3 text-center">${deadlineSpan}</td>
-            <td class="px-3 py-3" colspan="4">${overallStatusBadge}</td>
+            <td class="px-3 py-3 whitespace-nowrap">${overallStatusBadge}</td>
             <td class="px-3 py-3 text-right actions-cell">
-                 <div class="flex justify-end items-center gap-4">
+                <div class="flex justify-end items-center gap-4">
                     ${overallStatus === 'Completed' ? `<button class="archive-btn text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-1 px-3 rounded-md" data-order-id="${order.id}">Archive</button>` : ''}
                     <button class="comment-toggle-btn text-sm text-gray-500 hover:text-gray-800" data-order-id="${order.id}" title="Comment">💬</button>
                     <button class="edit-order-btn text-sm text-blue-600 hover:underline font-semibold" data-order-id="${order.id}">Edit</button>
-                 </div>
+                </div>
             </td>
         `;
         domElements.orderList.appendChild(groupTr);
@@ -208,6 +237,7 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
  * @param {string} orderId De ID van de te tonen order.
  */
 export function openOrderDetailsModal(orderId) {
+    document.body.classList.add('no-scroll');
     const order = state.orders.find(o => o.id === orderId);
     if (!order) {
         utils.showNotification('Order niet gevonden.', 'error');
@@ -233,11 +263,14 @@ function renderOrderDetails(order) {
     const table = document.createElement('table');
     table.className = 'min-w-full divide-y divide-gray-200 dark:divide-gray-700';
     
+    // De nieuwe, stabiele header met 9 kolommen
     table.innerHTML = `
         <thead class="bg-gray-50 dark:bg-gray-700">
             <tr>
-                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Onderdeel / Batch</th>
-                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Info & Stuktijd</th>
+                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Onderdeel / Batch</th>
+                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Materiaal</th>
+                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aantal</th>
+                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duur (uur)</th>
                 <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Machine</th>
                 <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shift</th>
@@ -252,76 +285,122 @@ function renderOrderDetails(order) {
     const tbody = table.querySelector('tbody');
 
     order.parts.forEach(part => {
-        const plannableItemsForPart = (part.batches && part.batches.length > 0) ? part.batches : [part];
+        const batches = part.batches || [];
+        const completedBatches = batches.filter(b => b.status === 'Completed');
+        const completedQuantity = completedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
         
-        plannableItemsForPart.forEach(item => {
-            const tr = document.createElement('tr');
-            const itemId = item.batchId || item.id;
-            const dataAttribute = item.batchId ? `data-batch-id="${item.batchId}"` : `data-part-id="${item.id}"`;
-            
-            tr.dataset.itemId = itemId;
-            if (item.status === 'To Be Planned' || !item.status) {
-                tr.draggable = true;
-                tr.classList.add('draggable-row', 'cursor-grab');
-            }
+        const partTr = document.createElement('tr');
+        partTr.className = 'part-header-row bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600';
+        partTr.dataset.partId = part.id;
+        
+        partTr.innerHTML = `
+            <td class="px-4 py-3 whitespace-nowrap" colspan="2">
+                <div class="flex items-center">
+                    <svg class="toggle-arrow w-5 h-5 mr-2 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    <span>${part.partName} (${part.id})</span>
+                </div>
+            </td>
+            <td class="px-3 py-3 text-sm font-normal text-center">${part.totalQuantity || 0}</td>
+            <td class="px-3 py-3 text-sm font-normal text-center">${batches.reduce((sum, b) => sum + (b.totalHours || 0), 0).toFixed(1)}</td>
+            <td class="px-3 py-3 text-sm font-normal text-center" colspan="4">
+                <span class="font-semibold">${completedQuantity} / ${part.totalQuantity || 0}</span> voltooid
+            </td>
+            <td class="px-3 py-3 text-sm font-normal">
+                <div class="flex items-center gap-1" title="Pas stuktijd aan voor alle batches van dit onderdeel">
+                    <span class="text-xs text-gray-500">Stuktijd:</span>
+                    <span class="editable-piece-time font-bold p-1 rounded hover:bg-blue-100 cursor-pointer">${part.productionTimePerPiece}</span>
+                    <span class="text-xs text-gray-500">min</span>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(partTr);
 
-            const postProcessingIcon = part.needsPostProcessing ? `<span class="ml-2" title="Nabehandeling nodig: ${part.postProcessingDays} dagen">🛡️</span>` : '';
-            const itemName = `${part.partName} ${postProcessingIcon}`;
-            const itemSubText = `(${itemId})`;
-            
-            let statusBadge;
-            switch (item.status) {
-                case 'Scheduled': statusBadge = `<span class="status-badge status-inp">Scheduled</span>`; break;
-                case 'Completed': statusBadge = `<span class="status-badge status-com">Completed</span>`; break;
-                default: statusBadge = `<span class="status-badge status-tbp">To Be Planned</span>`;
-            }
+        if (batches.length > 0) {
+            batches.forEach(item => {
+                const tr = document.createElement('tr');
+                const itemId = item.batchId;
+                
+                tr.dataset.batchId = item.batchId;
+                
+                const dataAttribute = `data-batch-id="${item.batchId}"`;
+                tr.className = 'batch-row hidden'; 
+                tr.dataset.parentPartId = part.id;
+                
+                if (item.status === 'To Be Planned' || !item.status) {
+                    tr.draggable = true;
+                    tr.classList.add('draggable-row', 'cursor-grab');
+                }
 
-            const selectedMachine = state.machines.find(m => m.name === item.machine);
-            let shiftOptions = `<option value="8" ${item.shift === 8 ? 'selected': ''}>Day (8h)</option>`;
-            if (selectedMachine) {
-                if (selectedMachine.name.includes('DMU')) shiftOptions += `<option value="16" ${item.shift === 16 ? 'selected': ''}>Day+Night (16h)</option>`;
-                if (selectedMachine.hasRobot) shiftOptions += `<option value="24" ${item.shift === 24 ? 'selected': ''}>Continuous (24h)</option>`;
-            }
+                let statusBadge;
+                switch (item.status) {
+                    case 'Scheduled': statusBadge = `<span class="status-badge status-inp">Scheduled</span>`; break;
+                    case 'Completed': statusBadge = `<span class="status-badge status-com">Completed</span>`; break;
+                    default: statusBadge = `<span class="status-badge status-tbp">To Be Planned</span>`;
+                }
+                
+                // NIEUW: Dropdown voor materiaalstatus per batch
+                const materialOptions = MATERIAL_STATUS.map(status => 
+                    `<option value="${status}" ${item.materialStatus === status ? 'selected' : ''}>${status}</option>`
+                ).join('');
 
-            const info = scheduleInfo.partScheduleInfo.get(itemId) || {};
-            const isDelayed = info.isDelayed;
-            const startDateInputClass = `start-date-input ${isDelayed ? 'delayed-start' : ''}`;
-            const startDateTitle = isDelayed ? `Waarschuwing: Actuele start is ${new Date(info.actualStartDate).toLocaleDateString('en-GB')}` : '';
+                const selectedMachine = state.machines.find(m => m.name === item.machine);
+                let shiftOptions = `<option value="8" ${item.shift === 8 ? 'selected': ''}>Dag (8u)</option>`;
+                if (selectedMachine && selectedMachine.hasRobot) {
+                    shiftOptions += `<option value="24" ${item.shift === 24 ? 'selected': ''}>Continu (24u)</option>`;
+                }
 
-            let actionButtonsHTML = `<button class="toggle-status-btn text-green-600 hover:text-green-900" ${dataAttribute}>${item.status === 'Completed' ? 'Reopen' : 'Complete'}</button>`;
-            if (item.status === 'Scheduled' || item.status === 'In Production') {
-                actionButtonsHTML += `<button class="unplan-btn text-gray-500 hover:text-gray-800 ml-4" ${dataAttribute} title="Clear planning">Clear</button>`;
-            }
-            actionButtonsHTML += `<button class="delete-btn text-red-600 hover:text-red-900 ml-4" ${dataAttribute}>Delete</button>`;
+                const info = scheduleInfo.partScheduleInfo.get(itemId) || {};
+                const isDelayed = info.isDelayed;
+                const startDateInputClass = `start-date-input ${isDelayed ? 'delayed-start' : ''}`;
+                const startDateTitle = isDelayed ? `Waarschuwing: Actuele start is ${new Date(info.actualStartDate).toLocaleDateString('nl-BE')}` : '';
 
-            tr.innerHTML = `
-                <td class="px-3 py-4 whitespace-nowrap">
-                    <div class="font-medium part-name-display">${itemName}</div>
-                    <div class="text-sm part-id-display">${itemSubText}</div>
-                </td>
-                <td class="px-3 py-4 whitespace-nowrap duration-cell cursor-pointer" ${dataAttribute}>
-                    <div class="text-sm">${item.quantity} pcs</div>
-                    <div class="text-xs text-gray-500">${(item.totalHours || 0).toFixed(1)} hrs | ${part.productionTimePerPiece} min/pc</div>
-                </td>
-                <td class="px-3 py-4 whitespace-nowrap">${statusBadge}</td>
-                <td class="px-3 py-4 whitespace-nowrap"><select class="machine-select" ${dataAttribute}><option value="">Kies...</option>${state.machines.map(m => `<option value="${m.name}" ${item.machine === m.name ? 'selected' : ''}>${m.name}</option>`).join('')}</select></td>
-                <td class="px-3 py-4 whitespace-nowrap"><select class="shift-select" ${dataAttribute} ${!item.machine ? 'disabled' : ''}>${shiftOptions}</select></td>
-                <td class="px-3 py-4 whitespace-nowrap"><input type="date" class="${startDateInputClass}" ${dataAttribute} value="${item.startDate || ''}" title="${startDateTitle}"></td>
-                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium"><div class="flex items-center">${actionButtonsHTML}</div></td>
-            `;
-            tbody.appendChild(tr);
-        });
+                let actionButtonsHTML = `
+                    <div class="relative action-dropdown">
+                        <button class="toggle-action-dropdown p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
+                        </button>
+                        <div class="action-menu hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-10 border dark:border-gray-600">
+                `;
+                if (item.status === 'Completed') {
+                    actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 toggle-status-btn action-link-reopen" ${dataAttribute}>Heropenen</a>`;
+                } else {
+                    actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 toggle-status-btn action-link-complete" ${dataAttribute}>Voltooien</a>`;
+                }
+                if (item.status === 'Scheduled' || item.status === 'In Production') {
+                    actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 unplan-btn action-link-unplan" ${dataAttribute}>Planning Wissen</a>`;
+                }
+                actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 delete-btn-in-details action-link-delete" ${dataAttribute}>Verwijderen</a></div></div>`;
+
+                tr.innerHTML = `
+                    <td class="px-3 py-4 whitespace-nowrap pl-10 text-sm">${itemId}</td>
+                    <td class="px-3 py-4 whitespace-nowrap">
+                        <select class="material-status-select bg-white dark:bg-gray-700 rounded-md text-sm w-full" ${dataAttribute}>
+                            ${materialOptions}
+                        </select>
+                    </td>
+                    <td class="px-3 py-4 whitespace-nowrap text-sm text-center">${item.quantity}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-sm text-center">${(item.totalHours || 0).toFixed(1)}</td>
+                    <td class="px-3 py-4 whitespace-nowrap">${statusBadge}</td>
+                    <td class="px-3 py-4 whitespace-nowrap"><select class="machine-select bg-white dark:bg-gray-700 rounded-md text-sm w-full" ${dataAttribute}><option value="">-</option>${state.machines.map(m => `<option value="${m.name}" ${item.machine === m.name ? 'selected' : ''}>${m.name}</option>`).join('')}</select></td>
+                    <td class="px-3 py-4 whitespace-nowrap"><select class="shift-select bg-white dark:bg-gray-700 rounded-md text-sm w-full" ${dataAttribute} ${!item.machine ? 'disabled' : ''}>${shiftOptions}</select></td>
+                    <td class="px-3 py-4 whitespace-nowrap"><input type="date" class="${startDateInputClass} w-full bg-white dark:bg-gray-700 rounded-md text-sm" ${dataAttribute} value="${item.startDate || ''}" title="${startDateTitle}"></td>
+                    <td class="px-3 py-4 whitespace-nowrap text-sm font-medium">${actionButtonsHTML}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
     });
 
     container.appendChild(table);
 }
+
+// js/ui.js
 
 function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
     const { schedule } = scheduleInfo;
     const spanningBlocks = [];
     const processedItems = new Set();
     const msPerDay = 1000 * 60 * 60 * 24;
-    const machineNameIndexMap = new Map(state.machines.map((m, i) => [m.name, i]));
     
     const itemsToDraw = getPlannableItems()
         .filter(item => item.machine && item.startDate && item.status !== 'Completed');
@@ -330,32 +409,32 @@ function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
     gridEndDate.setDate(gridEndDate.getDate() + 21);
     
     itemsToDraw.forEach(item => {
-        if (processedItems.has(item.id)) return;
+        const itemId = item.id || item.batchId;
+        if (processedItems.has(itemId) || !schedule[item.machine]) return;
         
-        const machineIndex = machineNameIndexMap.get(item.machine);
-        if (machineIndex === undefined) return;
-
-        const allDates = Object.keys(schedule[item.machine] || {})
-            .filter(dateStr => schedule[item.machine][dateStr].parts.some(p => p.partId === item.id))
+        // --- DIT IS DE GECORRIGEERDE LOGICA ---
+        // Zoek in de nieuwe, vereenvoudigde datastructuur
+        const allDates = Object.keys(schedule[item.machine])
+            .filter(dateStr => {
+                const daySchedule = schedule[item.machine][dateStr];
+                return daySchedule && (daySchedule.parts || []).some(p => p.partId === itemId);
+            })
             .map(dateStr => new Date(dateStr + 'T00:00:00'))
             .sort((a, b) => a - b);
             
         if (allDates.length === 0) return;
-        processedItems.add(item.id);
+        processedItems.add(itemId);
 
-        if (item.shift === 8 || item.shift === 16) {
-            let segmentStart = allDates[0];
-            for (let i = 1; i < allDates.length; i++) {
-                const diffDays = (allDates[i] - allDates[i - 1]) / msPerDay;
-                if (diffDays > 1) { 
-                    spanningBlocks.push({ itemId: item.id, machineIndex, start: segmentStart, end: allDates[i - 1] });
-                    segmentStart = allDates[i];
-                }
+        // De logica voor het groeperen van dagen blijft hetzelfde
+        let segmentStart = allDates[0];
+        for (let i = 1; i < allDates.length; i++) {
+            const diffDays = (allDates[i] - allDates[i - 1]) / msPerDay;
+            if (diffDays > 1) { 
+                spanningBlocks.push({ itemId: itemId, start: segmentStart, end: allDates[i - 1] });
+                segmentStart = allDates[i];
             }
-            spanningBlocks.push({ itemId: item.id, machineIndex, start: segmentStart, end: allDates[allDates.length - 1] });
-        } else {
-            spanningBlocks.push({ itemId: item.id, machineIndex, start: allDates[0], end: allDates[allDates.length - 1] });
         }
+        spanningBlocks.push({ itemId: itemId, start: segmentStart, end: allDates[allDates.length - 1] });
     });
 
     return spanningBlocks
@@ -368,6 +447,8 @@ function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
         });
 }
 
+// js/ui.js
+
 function renderPlanningGrid(scheduleInfo) {
     const { conflicts, deadlineInfo } = scheduleInfo;
     domElements.planningContainer.innerHTML = '';
@@ -376,8 +457,18 @@ function renderPlanningGrid(scheduleInfo) {
     grid.className = 'planning-grid';
     const gridStartDate = new Date(state.planningStartDate);
     gridStartDate.setHours(0, 0, 0, 0);
+
+    const machineRenderInfo = new Map();
+    // --- CORRECTIE: Start de machines na de 6 rijen van de headers ---
+    let currentRow = 5;
+    state.machines.forEach(machine => {
+        // Elke machine krijgt nu dezelfde behandeling
+        machineRenderInfo.set(machine.name, { startRow: currentRow });
+        currentRow += 2; // Elke machine-rij is 2 basis-rijen hoog
+    });
+
+    // Headers renderen (met aangepaste row-spans)
     const todayString = utils.formatDateToYMD(new Date());
-    
     const monthSpans = {}, weekSpans = {};
     let currentDate = new Date(gridStartDate);
     for (let i = 0; i < 21; i++) {
@@ -396,7 +487,8 @@ function renderPlanningGrid(scheduleInfo) {
         cell.className = 'grid-header month-header';
         cell.textContent = month.charAt(0).toUpperCase() + month.slice(1);
         cell.style.gridColumn = `${Object.values(monthSpans).slice(0, index).reduce((a, b) => a + b, 0) + 2} / span ${span}`;
-        cell.style.gridRow = 1;
+        // --- CORRECTIE: Laat de maand-header 2 rijen overspannen ---
+        cell.style.gridRow = '1 / span 1';
         grid.appendChild(cell);
     });
 
@@ -405,10 +497,11 @@ function renderPlanningGrid(scheduleInfo) {
         cell.className = 'grid-header week-header';
         cell.textContent = week;
         cell.style.gridColumn = `${Object.values(weekSpans).slice(0, index).reduce((a, b) => a + b, 0) + 2} / span ${span}`;
-        cell.style.gridRow = 2;
+        // --- CORRECTIE: Plaats week-header op rij 3 en laat 2 rijen overspannen ---
+        cell.style.gridRow = '2 / span 1.5';
         grid.appendChild(cell);
     });
-    
+
     currentDate = new Date(gridStartDate);
     for (let i = 0; i < 21; i++) {
         const cell = document.createElement('div');
@@ -416,106 +509,102 @@ function renderPlanningGrid(scheduleInfo) {
         cell.innerHTML = `${currentDate.getDate()}<br>${currentDate.toLocaleDateString('en-US', { weekday: 'short' })}`;
         if (utils.formatDateToYMD(currentDate) === todayString) cell.classList.add('today');
         cell.style.gridColumn = i + 2;
-        cell.style.gridRow = 3;
+        // --- CORRECTIE: Plaats dag-header op rij 5 en laat 2 rijen overspannen ---
+        cell.style.gridRow = '3 / span 2';
         grid.appendChild(cell);
         currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    state.machines.forEach((machine, machineIndex) => {
+    // Render de machine-rijen en cellen (deze logica was al correct)
+    state.machines.forEach(machine => {
+        const renderInfo = machineRenderInfo.get(machine.name);
+        
         const machineLabel = document.createElement('div');
         machineLabel.className = 'machine-label';
         machineLabel.textContent = machine.name;
-        machineLabel.style.gridRow = machineIndex + 4;
         machineLabel.style.gridColumn = 1;
+        machineLabel.style.gridRow = `${renderInfo.startRow} / span 2`;
         grid.appendChild(machineLabel);
-        
+
         let cellDate = new Date(gridStartDate);
-        for (let i = 0; i < 21; i++) {
+        for (let j = 0; j < 21; j++) {
             const dayCell = document.createElement('div');
             dayCell.className = 'grid-cell';
-            if ([0, 6].includes(cellDate.getDay())) dayCell.classList.add('weekend');
-            const cellDateString = utils.formatDateToYMD(cellDate);
-            dayCell.dataset.date = cellDateString;
+            if ([0, 6].includes(cellDate.getDay())) {
+                dayCell.classList.add('weekend');
+            }
+            dayCell.dataset.date = utils.formatDateToYMD(cellDate);
             dayCell.dataset.machine = machine.name;
-            
-            for (const absence of state.absences) {
-                const startDate = new Date(absence.start);
-                startDate.setHours(0, 0, 0, 0);
-                const endDate = new Date(absence.end);
-                endDate.setHours(23, 59, 59, 999);
-                if (cellDate >= startDate && cellDate <= endDate) {
-                    dayCell.classList.add('absence-cell');
-                    dayCell.title = absence.reason;
+
+            // --- HIER IS HET VOLLEDIGE BLOK VOOR DE AFWEZIGHEDEN ---
+            const currentDateForAbsenceCheck = new Date(dayCell.dataset.date + 'T12:00:00Z');
+            let isAbsence = false;
+            let absenceReason = '';
+
+            for (const abs of state.absences) {
+                const start = new Date(abs.start + 'T00:00:00Z');
+                const end = new Date(abs.end + 'T23:59:59Z');
+                if (currentDateForAbsenceCheck >= start && currentDateForAbsenceCheck <= end) {
+                    isAbsence = true;
+                    absenceReason = abs.reason;
+                    break;
                 }
             }
-            
-            dayCell.style.gridRow = machineIndex + 4;
-            dayCell.style.gridColumn = i + 2;
+
+            if (isAbsence) {
+                dayCell.classList.add('absence-cell');
+                dayCell.title = `Afwezig: ${absenceReason}`;
+            }
+            // --- EINDE BLOK AFWEZIGHEDEN ---
+
+            dayCell.style.gridRow = `${renderInfo.startRow} / span 2`;
+            dayCell.style.gridColumn = j + 2;
             grid.appendChild(dayCell);
             cellDate.setDate(cellDate.getDate() + 1);
         }
     });
 
-    const spanningBlocks = calculateSpanningBlocks(scheduleInfo, gridStartDate);
+    // Plaats de blokken op de juiste (sub-)rij (deze logica was al correct)
     const plannableItems = getPlannableItems();
-
+    const spanningBlocks = calculateSpanningBlocks(scheduleInfo, gridStartDate);
     spanningBlocks.forEach(blockInfo => {
-        const item = plannableItems.find(i => i.id === blockInfo.itemId);
+        const item = plannableItems.find(i => (i.id || i.batchId) === blockInfo.itemId);
         if (!item) return;
-        
-        const parentPart = findPart(item.parentId || item.id);
-        if (!parentPart) return;
+
+        const renderInfo = machineRenderInfo.get(item.machine);
+        if (!renderInfo) return;
 
         const order = state.orders.find(o => o.id === item.orderId);
         if (!order) return;
-        
+        const parentPart = findPart(item.parentId || item.id);
+        if (!parentPart) return;
+
         const orderBlock = document.createElement('div');
-        orderBlock.draggable = true;
-        orderBlock.dataset.itemId = item.id;
+        let blockRow = renderInfo.startRow;
         
         let sum = 0;
         for (let i = 0; i < order.id.length; i++) sum += order.id.charCodeAt(i);
         const colorIndex = (sum % 5) + 1;
-
         const materialClass = item.materialStatus !== 'Available' ? 'material-missing' : '';
-        const isConflict = conflicts.has(item.id);
+        const isConflict = conflicts.has(item.id || item.batchId);
         const urgentClass = order.isUrgent ? 'urgent-block' : '';
         const deadlineMissedClass = deadlineInfo.get(order.id) ? 'deadline-missed-block' : '';
         const conflictClass = isConflict ? 'order-conflict' : `color-${colorIndex}`;
         orderBlock.className = `order-block ${materialClass} ${conflictClass} ${urgentClass} ${deadlineMissedClass}`;
+        orderBlock.draggable = true;
+        orderBlock.dataset.itemId = item.id || item.batchId;
         
-        const machine = state.machines.find(m => m.name === item.machine);
-        const usesRobot = machine && machine.hasRobot && item.shift > 8;
-        let shiftText;
-        switch (item.shift) {
-            case 16: shiftText = 'Day+Night (16h)'; break;
-            case 24: shiftText = 'Continuous (24h)'; break;
-            default: shiftText = 'Day (8h)';
-        }
+        orderBlock.style.gridRow = `${renderInfo.startRow} / span 2`;
+        orderBlock.style.gridColumn = `${blockInfo.startColumn} / span ${blockInfo.span}`;
 
-        let title = `${item.partName} (${item.id})\nQuantity: ${item.quantity} pcs\nShift: ${shiftText} ${usesRobot ? '(with Robot)' : ''}\nTotal duration: ${utils.getPartDuration(item).toFixed(1)} hours\nCustomer: ${order.customer}`;
-        if (isConflict) {
-            title += `\n\nCONFLICT WITH: ${conflicts.get(item.id).join(', ')}`;
-        }
-        orderBlock.title = title;
-        
-        const postProcessingIcon = parentPart.needsPostProcessing 
-            ? `<span title="Nabehandeling nodig: ${parentPart.postProcessingDays} dagen">🛡️ </span>` 
-            : '';
-        
         let blockIdDisplay;
         if (item.parentId) {
-            const shortPartId = item.parentId.slice(-5);
-            const batchIndex = item.id.substring(item.id.lastIndexOf('-') + 1);
-            blockIdDisplay = `${shortPartId} /${batchIndex}`;
+            blockIdDisplay = `${item.parentId.slice(-5)}/${(item.id || item.batchId).substring((item.id || item.batchId).lastIndexOf('-') + 2)}`;
         } else {
-            blockIdDisplay = item.id.slice(-5);
+            blockIdDisplay = (item.id || item.batchId).slice(-5);
         }
-        
-        const blockContent = `<span>${postProcessingIcon}${usesRobot ? '🤖 ' : ''}${blockIdDisplay}</span>`;
-        orderBlock.innerHTML = blockContent;
-        orderBlock.style.gridRow = blockInfo.machineIndex + 4;
-        orderBlock.style.gridColumn = `${blockInfo.startColumn} / span ${blockInfo.span}`;
+        orderBlock.innerHTML = `<span>${blockIdDisplay}</span>`; // shiftIcon is verwijderd
+        orderBlock.title = `${parentPart.partName} (${item.id || item.batchId}) - ${order.customer}`;
         grid.appendChild(orderBlock);
     });
 
@@ -640,29 +729,19 @@ export function createNewPartForm(container, deadline) {
 
     partDiv.querySelector('.remove-part-btn')?.addEventListener('click', () => partDiv.remove());
 
-    // =================== DIT IS DE NIEUWE CODE ===================
-    // Zoek het 'total quantity'-inputveld dat we net hebben aangemaakt
     const totalQuantityInput = partDiv.querySelector('[data-field="totalQuantity"]');
-    
-    // Voeg een listener toe die de onderliggende data synchroniseert wanneer je typt
     totalQuantityInput.addEventListener('input', (e) => {
         const newQuantity = parseInt(e.target.value, 10) || 0;
-        
         try {
             const batchesData = JSON.parse(partDiv.dataset.batches);
-            
-            // Als het een simpel onderdeel is met maar één batch, pas de hoeveelheid aan
             if (batchesData.length === 1) {
                 batchesData[0].quantity = newQuantity;
             }
-            
-            // Sla de bijgewerkte data weer op in de dataset van het onderdeel
             partDiv.dataset.batches = JSON.stringify(batchesData);
         } catch (err) {
             console.error("Kon batch-data niet bijwerken na wijziging aantal:", err);
         }
     });
-    // =============================================================
 }
 
 export function openEditModal(orderId) {

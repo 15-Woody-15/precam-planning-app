@@ -198,6 +198,11 @@ html.dark #planning-container {
     scrollbar-color: #4b5563 #1f2937; /* Kleur van balk en achtergrond */
 }
 
+/* Helper class om scrollen van de body te blokkeren */
+.no-scroll {
+    overflow: hidden;
+}
+
 body { 
     font-family: 'Inter', sans-serif; 
     background-color: var(--kleur-achtergrond); 
@@ -213,7 +218,7 @@ body {
 .planning-grid { 
     display: grid; 
     grid-template-columns: 180px repeat(21, 59px); 
-    grid-auto-rows: 40px;
+    grid-auto-rows: 20px;
     gap: 2px;
     position: relative; 
     transition: grid-auto-rows 0.2s ease-in-out;
@@ -615,4 +620,65 @@ html.dark #order-table th {
     /* Voorkom dat de preview zelf events blokkeert */
     pointer-events: none;
     z-index: 9999;
+}
+
+#trash-can-dropzone.trash-can-active {
+    transform: scale(1.2);
+    background-color: #dc2626; /* Donkerder rood */
+}
+
+.order-block.half-height {
+    height: 16px; /* Helft van de normale 32px, met wat marge */
+    font-size: 9px;
+    padding: 1px 4px;
+    align-self: center; /* Zorgt voor nette verticale centrering */
+}
+
+/* --- FIX VOOR HARDNEKKIG DARK MODE PROBLEEM (DEFINITIEVE VERSIE 4.0) --- */
+
+/* --- SECTIE 1: REPAREER DE ORDER DETAILS POPUP --- */
+
+/* Achtergronden forceren in lichte modus */
+html:not(.dark) #order-details-modal [class*="dark:bg-gray-800"] {
+    background-color: #ffffff !important;
+}
+html:not(.dark) #order-details-modal [class*="dark:bg-gray-700"] {
+    background-color: #f9fafb !important;
+}
+html:not(.dark) #order-details-modal [class*="dark:bg-gray-600"] {
+    background-color: #f3f4f6 !important;
+}
+
+/* Tekstkleuren forceren voor actie-links in lichte modus */
+html:not(.dark) a.action-link-complete:link,
+html:not(.dark) a.action-link-complete:visited {
+    color: #16a34a !important; /* Groen */
+}
+html:not(.dark) a.action-link-delete:link,
+html:not(.dark) a.action-link-delete:visited {
+    color: #dc2626 !important; /* Rood */
+}
+html:not(.dark) a.action-link-unplan:link,
+html:not(.dark) a.action-link-unplan:visited {
+    color: #ea580c !important; /* Oranje */
+}
+html:not(.dark) a.action-link-reopen:link,
+html:not(.dark) a.action-link-reopen:visited {
+    color: #ca8a04 !important; /* Geel */
+}
+
+
+/* --- SECTIE 2: REPAREER HET COMMENTAAR-VENSTER --- */
+
+/* NIEUW: Forceer lichte achtergronden voor het commentaar-venster */
+html:not(.dark) .comment-row [class*="dark:bg-gray-800"] {
+    background-color: #f9fafb !important; /* Tailwind's bg-gray-50 */
+}
+html:not(.dark) .comment-row [class*="dark:bg-gray-700"] {
+    background-color: #ffffff !important; /* Tailwind's bg-white */
+}
+
+/* NIEUW: Forceer donkere tekstkleur voor het commentaar-veld in lichte modus */
+html:not(.dark) .comment-row textarea {
+    color: #111827 !important;
 }
