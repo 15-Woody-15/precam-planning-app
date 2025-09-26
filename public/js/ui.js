@@ -4,7 +4,7 @@ import { state, findPart, getPlannableItems } from './state.js';
 import * as utils from './utils.js';
 import * as absences from './absences.js';
 import * as schedule from './schedule.js';
-import { MATERIAL_STATUS } from './constants.js';
+import { MATERIAL_STATUS, MACHINE_COLORS } from './constants.js';
 
 export const domElements = {};
 let partCounter = 0;
@@ -258,6 +258,8 @@ export function renderOrderDetails(order) {
     const scheduleInfo = schedule.buildScheduleAndDetectConflicts();
     const table = document.createElement('table');
     table.className = 'min-w-full divide-y divide-gray-200 dark:divide-gray-700';
+    
+    // De header heeft nu 10 kolommen, inclusief 'Deadline'
     table.innerHTML = `
         <thead class="bg-gray-50 dark:bg-gray-700">
             <tr>
@@ -269,6 +271,7 @@ export function renderOrderDetails(order) {
                 <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Machine</th>
                 <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shift</th>
                 <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Startdatum</th>
+                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deadline</th>
                 <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acties</th>
             </tr>
         </thead>
@@ -281,17 +284,16 @@ export function renderOrderDetails(order) {
         const completedBatches = batches.filter(b => b.status === 'Completed');
         const completedQuantity = completedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
         
-        // --- NIEUW: Bepaal of dit specifieke onderdeel aandacht nodig heeft ---
         const partRequiresAttention = batches.some(batch => 
             (batch.materialStatus && batch.materialStatus !== 'Available') || batch.status === 'To Be Planned'
         );
         const attentionIcon = `<span class="mr-2" title="Actie vereist voor deze groep">🚩</span>`;
-        // --- EINDE NIEUWE CODE ---
 
         const partTr = document.createElement('tr');
         partTr.className = 'part-header-row bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600';
         partTr.dataset.partId = part.id;
         
+        // De samenvattingsrij is aangepast voor 10 kolommen
         partTr.innerHTML = `
             <td class="px-4 py-3 whitespace-nowrap" colspan="2">
                 <div class="flex items-center">
@@ -302,7 +304,7 @@ export function renderOrderDetails(order) {
             </td>
             <td class="px-3 py-3 text-sm font-normal text-center">${part.totalQuantity || 0}</td>
             <td class="px-3 py-3 text-sm font-normal text-center">${batches.reduce((sum, b) => sum + (b.totalHours || 0), 0).toFixed(1)}</td>
-            <td class="px-3 py-3 text-sm font-normal text-center" colspan="4">
+            <td class="px-3 py-3 text-sm font-normal text-center" colspan="5">
                 <span class="font-semibold">${completedQuantity} / ${part.totalQuantity || 0}</span> voltooid
             </td>
             <td class="px-3 py-3 text-sm font-normal">
@@ -316,7 +318,6 @@ export function renderOrderDetails(order) {
         tbody.appendChild(partTr);
 
         if (batches.length > 0) {
-            // De code voor het tonen van de individuele batch-rijen blijft ongewijzigd
             batches.forEach(item => {
                 const tr = document.createElement('tr');
                 const itemId = item.batchId;
@@ -358,7 +359,8 @@ export function renderOrderDetails(order) {
                 const startDateInputClass = `start-date-input ${isDelayed ? 'delayed-start' : ''}`;
                 const startDateTitle = isDelayed ? `Waarschuwing: Actuele start is ${new Date(info.actualStartDate).toLocaleDateString('nl-BE')}` : '';
 
-                let actionButtonsHTML = `
+                let actionButtonsHTML = `...`; // Dit wordt hieronder correct opgebouwd
+                actionButtonsHTML = `
                     <div class="relative action-dropdown">
                         <button class="toggle-action-dropdown p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600">
                             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
@@ -381,6 +383,7 @@ export function renderOrderDetails(order) {
                     <td class="px-3 py-4 whitespace-nowrap"><select class="machine-select bg-white dark:bg-gray-700 rounded-md text-sm w-full" ${dataAttribute}><option value="">-</option>${state.machines.map(m => `<option value="${m.name}" ${item.machine === m.name ? 'selected' : ''}>${m.name}</option>`).join('')}</select></td>
                     <td class="px-3 py-4 whitespace-nowrap"><select class="shift-select bg-white dark:bg-gray-700 rounded-md text-sm w-full" ${dataAttribute} ${!item.machine ? 'disabled' : ''}>${shiftOptions}</select></td>
                     <td class="px-3 py-4 whitespace-nowrap"><input type="date" class="${startDateInputClass} w-full bg-white dark:bg-gray-700 rounded-md text-sm" ${dataAttribute} value="${item.startDate || ''}" title="${startDateTitle}"></td>
+                    <td class="px-3 py-4 whitespace-nowrap text-sm">${item.deadline ? new Date(item.deadline + 'T00:00:00').toLocaleDateString('nl-BE') : '-'}</td>
                     <td class="px-3 py-4 whitespace-nowrap text-sm font-medium">${actionButtonsHTML}</td>
                 `;
                 tbody.appendChild(tr);
@@ -549,7 +552,22 @@ function renderPlanningGrid(scheduleInfo) {
     });
 
     const plannableItems = getPlannableItems();
+    
+    // --- DEZE REGEL WAS WAARSCHIJNLIJK WEGGEVALLEN ---
     const spanningBlocks = calculateSpanningBlocks(scheduleInfo, gridStartDate);
+    
+    spanningBlocks.sort((a, b) => {
+        const itemA = plannableItems.find(i => (i.id || i.batchId) === a.itemId);
+        const itemB = plannableItems.find(i => (i.id || i.batchId) === b.itemId);
+        if (!itemA || !itemB) return 0;
+
+        if (itemA.machine < itemB.machine) return -1;
+        if (itemA.machine > itemB.machine) return 1;
+        return a.start - b.start;
+    });
+
+    const lastOrderDetails = new Map();
+
     spanningBlocks.forEach(blockInfo => {
         const item = plannableItems.find(i => (i.id || i.batchId) === blockInfo.itemId);
         if (!item) return;
@@ -565,26 +583,31 @@ function renderPlanningGrid(scheduleInfo) {
 
         const orderBlock = document.createElement('div');
         
-        let sum = 0;
-        for (let i = 0; i < order.id.length; i++) sum += order.id.charCodeAt(i);
-        const colorIndex = (sum % 5) + 1;
+        const machineColors = MACHINE_COLORS[item.machine] || MACHINE_COLORS.default;
+        const lastDetails = lastOrderDetails.get(item.machine);
+        let colorClass;
 
+        if (lastDetails && order.id === lastDetails.orderId) {
+            colorClass = lastDetails.colorClass;
+        } else {
+            colorClass = (lastDetails && lastDetails.colorClass === machineColors.base) 
+                ? machineColors.alt 
+                : machineColors.base;
+        }
+        lastOrderDetails.set(item.machine, { orderId: order.id, colorClass: colorClass });
+        
         let materialClass = '';
         switch (item.materialStatus) {
-            case 'Not Available':
-                materialClass = 'material-unavailable';
-                break;
-            case 'Ordered':
-                materialClass = 'material-ordered';
-                break;
+            case 'Not Available': materialClass = 'material-unavailable'; break;
+            case 'Ordered': materialClass = 'material-ordered'; break;
         }
         
         const isConflict = conflicts.has(item.id || item.batchId);
         const urgentClass = order.isUrgent ? 'urgent-block' : '';
         const deadlineMissedClass = deadlineInfo.get(item.id || item.batchId) ? 'deadline-missed-block' : '';
-        const conflictClass = isConflict ? 'order-conflict' : `color-${colorIndex}`;
+        const finalColorClass = isConflict ? 'order-conflict' : colorClass;
         
-        orderBlock.className = `order-block ${materialClass} ${conflictClass} ${urgentClass} ${deadlineMissedClass}`;
+        orderBlock.className = `order-block ${materialClass} ${finalColorClass} ${urgentClass} ${deadlineMissedClass}`;
         orderBlock.draggable = true;
         orderBlock.dataset.itemId = item.id || item.batchId;
         
@@ -597,13 +620,12 @@ function renderPlanningGrid(scheduleInfo) {
         }
         
         orderBlock.innerHTML = `<span>${blockIdDisplay}</span>`;
-        // Creëer een meer gedetailleerde tooltip
         orderBlock.title = `Klant: ${order.customer}
-        Order: ${order.id}
-        Onderdeel: ${parentPart.partName}
-        Batch: ${item.id || item.batchId}
-        Aantal: ${item.quantity} stuks
-        Duur: ${item.totalHours.toFixed(1)} uur`;
+Order: ${order.id}
+Onderdeel: ${parentPart.partName}
+Batch: ${item.id || item.batchId}
+Aantal: ${item.quantity} stuks
+Duur: ${item.totalHours.toFixed(1)} uur`;
         grid.appendChild(orderBlock);
     });
 
