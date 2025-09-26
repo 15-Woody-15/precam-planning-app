@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import * as api from './api.js';
+import * as utils from './utils.js';
 
 /**
  * Haalt de actuele afwezigheden op uit de centrale state.
@@ -15,6 +16,9 @@ export function getAbsences() {
  */
 export async function addAbsence(absence) {
     const newAbsenceFromServer = await api.addAbsenceOnBackend(absence);
+    newAbsenceFromServer.start = utils.formatDateToYMD(newAbsenceFromServer.start);
+    newAbsenceFromServer.end = utils.formatDateToYMD(newAbsenceFromServer.end);
+    
     state.absences.push(newAbsenceFromServer);
 }
 
