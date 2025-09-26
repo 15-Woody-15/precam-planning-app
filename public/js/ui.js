@@ -1,12 +1,11 @@
-// js/ui.js
+// js/ui.js - ALLERLAATSTE, GECORRIGEERDE VERSIE
 
-import { state, findPart, findBatch, getPlannableItems } from './state.js';
+import { state, findPart, getPlannableItems } from './state.js';
 import * as utils from './utils.js';
 import * as absences from './absences.js';
 import * as schedule from './schedule.js';
 import { MATERIAL_STATUS } from './constants.js';
 
-// --- DOM ELEMENTEN & GLOBALE VARIABELEN ---
 export const domElements = {};
 let partCounter = 0;
 let activePartFormElement = null;
@@ -38,7 +37,7 @@ export function initializeDOMElements() {
         'batch-splitter-modal', 'cancel-batches-btn', 'total-quantity-display', 'remaining-quantity-display',
         'batch-list-container', 'add-batch-row-btn', 'batch-validation-msg', 'save-batches-btn',
         'order-details-modal', 'close-order-details-btn', 'details-order-id', 'order-details-content',
-        'trash-can-dropzone'
+        'trash-can-dropzone', 'notification-container'
     ];
     ids.forEach(id => {
         const camelCaseId = id.replace(/-([a-z])/g, g => g[1].toUpperCase());
@@ -47,16 +46,12 @@ export function initializeDOMElements() {
     domElements.orderListThead = document.querySelector('#order-table thead');
 }
 
-
-// --- HOOFD RENDER FUNCTie ---
 export function renderAll() {
     const scheduleInfo = schedule.buildScheduleAndDetectConflicts();
     const machineLoadInfo = schedule.calculateMachineLoad(scheduleInfo, state.planningStartDate);
     if (state.machineLoadWeek === null) {
         const firstWeek = utils.getWeekNumber(state.planningStartDate);
-        if (machineLoadInfo[firstWeek]) {
-            state.machineLoadWeek = firstWeek;
-        }
+        if (machineLoadInfo[firstWeek]) state.machineLoadWeek = firstWeek;
     }
     renderMachineLoad(machineLoadInfo);
     renderCustomerDropdown();
@@ -77,13 +72,7 @@ function renderCustomerDropdown() {
      });
 }
 
-// --- DETAIL RENDER FUNCTIES ---
 export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const oneWeekFromNow = new Date();
-    oneWeekFromNow.setDate(today.getDate() + 7);
-
     const filteredOrders = state.orders.filter(order => {
         if (!state.searchTerm) return true;
         const term = state.searchTerm.toLowerCase();
@@ -91,12 +80,8 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
             return (order[state.searchKey] || '').toString().toLowerCase().includes(term);
         }
         return order.parts.some(part => {
-            if ((part.partName || '').toString().toLowerCase().includes(term) || (part.drawingNumber || '').toString().toLowerCase().includes(term)) {
-                return true;
-            }
-            if (part.batches) {
-                return part.batches.some(batch => (batch.batchId || '').toString().toLowerCase().includes(term));
-            }
+            if ((part.partName || '').toString().toLowerCase().includes(term) || (part.drawingNumber || '').toString().toLowerCase().includes(term)) return true;
+            if (part.batches) return part.batches.some(batch => (batch.batchId || '').toString().toLowerCase().includes(term));
             return false;
         });
     });
@@ -140,16 +125,17 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
     const deadlineMissedIcon = `<svg class="inline-block h-5 w-5 text-red-600" title="Deadline will be missed!" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5H10.75V5z" clip-rule="evenodd" /></svg>`;
     
     sortedOrders.forEach(order => {
-        // --- FIX: BEREKEN overallStatus AAN HET BEGIN ---
         const overallStatus = utils.getOverallOrderStatus(order);
+        const orderRequiresAttention = order.parts.some(part => 
+            part.batches && part.batches.some(batch => 
+                (batch.materialStatus && batch.materialStatus !== 'Available') || batch.status === 'To Be Planned'
+            )
+        );
+        const attentionIcon = `<span class="mr-2" title="Actie vereist: materiaal niet beschikbaar of nog niet ingepland">🚩</span>`;
 
         const groupTr = document.createElement('tr');
-        
-        // Pas de class aan op basis van de status
         let rowClass = `order-group-row ${order.isUrgent ? 'urgent' : ''} cursor-pointer`;
-        if (overallStatus === 'To Be Planned') {
-            rowClass += ' bg-blue-50 dark:bg-blue-900/20';
-        }
+        if (overallStatus === 'To Be Planned') rowClass += ' bg-blue-50 dark:bg-blue-900/20';
         groupTr.className = rowClass;
         groupTr.dataset.orderId = order.id;
         
@@ -160,14 +146,9 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
         const orderHasDelayedParts = itemIds.some(id => partScheduleInfo.get(id)?.isDelayed);
         const willMissDeadline = deadlineInfo.get(order.id);
 
-        // Voeg een gekleurde rand toe bij conflicten of vertraging
-        if (orderHasConflict) {
-            groupTr.style.borderLeft = '4px solid #ef4444'; // Rood voor conflict
-        } else if (orderHasDelayedParts) {
-            groupTr.style.borderLeft = '4px solid #f59e0b'; // Amber voor vertraging
-        }
+        if (orderHasConflict) groupTr.style.borderLeft = '4px solid #ef4444';
+        else if (orderHasDelayedParts) groupTr.style.borderLeft = '4px solid #f59e0b';
         
-        // De rest van de code voor het opbouwen van de rij
         const deadlineDate = new Date(order.deadline + 'T00:00:00');
         const deadlineText = deadlineDate.toLocaleDateString('en-GB');
         
@@ -198,6 +179,7 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
                 <div class="flex items-center">
                     <input type="checkbox" title="Urgent Order" class="toggle-urgent-btn h-4 w-4 rounded border-gray-300 text-indigo-600 mr-3" data-order-id="${order.id}" ${order.isUrgent ? 'checked' : ''}>
                     <div>
+                        ${orderRequiresAttention ? attentionIcon : ''}
                         ${order.isUrgent ? '<span class="mr-2" title="Urgent Order">🔥</span>' : ''}
                         ${willMissDeadline ? `<span class="mr-2">${deadlineMissedIcon}</span>` : ''}
                         ${orderHasConflict ? `<span class="mr-2">${conflictIcon}</span>` : ''}
@@ -215,11 +197,11 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
             <td class="px-3 py-3 text-center">${deadlineSpan}</td>
             <td class="px-3 py-3 whitespace-nowrap">${overallStatusBadge}</td>
             <td class="px-3 py-3 text-right actions-cell">
-                <div class="flex justify-end items-center gap-4">
+                 <div class="flex justify-end items-center gap-4">
                     ${overallStatus === 'Completed' ? `<button class="archive-btn text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-1 px-3 rounded-md" data-order-id="${order.id}">Archive</button>` : ''}
                     <button class="comment-toggle-btn text-sm text-gray-500 hover:text-gray-800" data-order-id="${order.id}" title="Comment">💬</button>
                     <button class="edit-order-btn text-sm text-blue-600 hover:underline font-semibold" data-order-id="${order.id}">Edit</button>
-                </div>
+                 </div>
             </td>
         `;
         domElements.orderList.appendChild(groupTr);
@@ -232,38 +214,21 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
     });
 }
 
-/**
- * Opent de order detail modal en vult deze met de informatie van de gekozen order.
- * @param {string} orderId De ID van de te tonen order.
- */
 export function openOrderDetailsModal(orderId) {
     document.body.classList.add('no-scroll');
     const order = state.orders.find(o => o.id === orderId);
-    if (!order) {
-        utils.showNotification('Order niet gevonden.', 'error');
-        return;
-    }
-
+    if (!order) return;
     domElements.detailsOrderId.textContent = order.id;
     renderOrderDetails(order);
     domElements.orderDetailsModal.classList.remove('hidden');
-    domElements.orderDetailsModal.classList.remove('modal-minimized');
 }
 
-/**
- * Rendert de details (onderdelen en batches) van een specifieke order in de modal.
- * @param {object} order Het volledige order-object.
- */
-function renderOrderDetails(order) {
+export function renderOrderDetails(order) {
     const container = domElements.orderDetailsContent;
     container.innerHTML = '';
-
     const scheduleInfo = schedule.buildScheduleAndDetectConflicts();
-    
     const table = document.createElement('table');
     table.className = 'min-w-full divide-y divide-gray-200 dark:divide-gray-700';
-    
-    // De nieuwe, stabiele header met 9 kolommen
     table.innerHTML = `
         <thead class="bg-gray-50 dark:bg-gray-700">
             <tr>
@@ -281,9 +246,7 @@ function renderOrderDetails(order) {
         <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
         </tbody>
     `;
-
     const tbody = table.querySelector('tbody');
-
     order.parts.forEach(part => {
         const batches = part.batches || [];
         const completedBatches = batches.filter(b => b.status === 'Completed');
@@ -319,9 +282,7 @@ function renderOrderDetails(order) {
             batches.forEach(item => {
                 const tr = document.createElement('tr');
                 const itemId = item.batchId;
-                
                 tr.dataset.batchId = item.batchId;
-                
                 const dataAttribute = `data-batch-id="${item.batchId}"`;
                 tr.className = 'batch-row hidden'; 
                 tr.dataset.parentPartId = part.id;
@@ -338,15 +299,22 @@ function renderOrderDetails(order) {
                     default: statusBadge = `<span class="status-badge status-tbp">To Be Planned</span>`;
                 }
                 
-                // NIEUW: Dropdown voor materiaalstatus per batch
-                const materialOptions = MATERIAL_STATUS.map(status => 
-                    `<option value="${status}" ${item.materialStatus === status ? 'selected' : ''}>${status}</option>`
-                ).join('');
+                // --- NIEUWE LOGICA: HTML voor de ENKELE materiaal-knop ---
+                const currentStatus = item.materialStatus || 'Not Available';
+                let buttonClass = '';
+                switch (currentStatus) {
+                    case 'Available': buttonClass = 'bg-green-600 hover:bg-green-700 text-white'; break;
+                    case 'Ordered': buttonClass = 'bg-blue-600 hover:bg-blue-700 text-white'; break;
+                    case 'Not Available': buttonClass = 'bg-red-600 hover:bg-red-700 text-white'; break;
+                }
+                const materialButtonHTML = `<button type="button" class="material-status-cycler w-full text-xs font-bold py-1 px-2 rounded-md transition ${buttonClass}" ${dataAttribute}>${currentStatus}</button>`;
+                // --- EINDE NIEUWE LOGICA ---
 
                 const selectedMachine = state.machines.find(m => m.name === item.machine);
                 let shiftOptions = `<option value="8" ${item.shift === 8 ? 'selected': ''}>Dag (8u)</option>`;
-                if (selectedMachine && selectedMachine.hasRobot) {
-                    shiftOptions += `<option value="24" ${item.shift === 24 ? 'selected': ''}>Continu (24u)</option>`;
+                if (selectedMachine) {
+                    if (selectedMachine.name.includes('DMU')) shiftOptions += `<option value="16" ${item.shift === 16 ? 'selected': ''}>Dag+Nacht (16u)</option>`;
+                    if (selectedMachine.hasRobot) shiftOptions += `<option value="24" ${item.shift === 24 ? 'selected': ''}>Continu (24u)</option>`;
                 }
 
                 const info = scheduleInfo.partScheduleInfo.get(itemId) || {};
@@ -354,29 +322,23 @@ function renderOrderDetails(order) {
                 const startDateInputClass = `start-date-input ${isDelayed ? 'delayed-start' : ''}`;
                 const startDateTitle = isDelayed ? `Waarschuwing: Actuele start is ${new Date(info.actualStartDate).toLocaleDateString('nl-BE')}` : '';
 
-                let actionButtonsHTML = `
+                let actionButtonsHTML = `...`; // Dit wordt hieronder correct opgebouwd
+                actionButtonsHTML = `
                     <div class="relative action-dropdown">
                         <button class="toggle-action-dropdown p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600">
                             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
                         </button>
                         <div class="action-menu hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-10 border dark:border-gray-600">
                 `;
-                if (item.status === 'Completed') {
-                    actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 toggle-status-btn action-link-reopen" ${dataAttribute}>Heropenen</a>`;
-                } else {
-                    actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 toggle-status-btn action-link-complete" ${dataAttribute}>Voltooien</a>`;
-                }
-                if (item.status === 'Scheduled' || item.status === 'In Production') {
-                    actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 unplan-btn action-link-unplan" ${dataAttribute}>Planning Wissen</a>`;
-                }
+                if (item.status === 'Completed') actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 toggle-status-btn action-link-reopen" ${dataAttribute}>Heropenen</a>`;
+                else actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 toggle-status-btn action-link-complete" ${dataAttribute}>Voltooien</a>`;
+                if (item.status === 'Scheduled' || item.status === 'In Production') actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 unplan-btn action-link-unplan" ${dataAttribute}>Planning Wissen</a>`;
                 actionButtonsHTML += `<a href="#" class="block px-4 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 delete-btn-in-details action-link-delete" ${dataAttribute}>Verwijderen</a></div></div>`;
 
                 tr.innerHTML = `
                     <td class="px-3 py-4 whitespace-nowrap pl-10 text-sm">${itemId}</td>
                     <td class="px-3 py-4 whitespace-nowrap">
-                        <select class="material-status-select bg-white dark:bg-gray-700 rounded-md text-sm w-full" ${dataAttribute}>
-                            ${materialOptions}
-                        </select>
+                        ${materialButtonHTML}
                     </td>
                     <td class="px-3 py-4 whitespace-nowrap text-sm text-center">${item.quantity}</td>
                     <td class="px-3 py-4 whitespace-nowrap text-sm text-center">${(item.totalHours || 0).toFixed(1)}</td>
@@ -390,11 +352,18 @@ function renderOrderDetails(order) {
             });
         }
     });
-
     container.appendChild(table);
-}
 
-// js/ui.js
+    state.expandedPartsInModal.forEach(partId => {
+        const headerRow = tbody.querySelector(`tr[data-part-id="${partId}"]`);
+        const batchRows = tbody.querySelectorAll(`tr[data-parent-part-id="${partId}"]`);
+        if (headerRow && batchRows.length > 0) {
+            batchRows.forEach(row => row.classList.remove('hidden'));
+            const arrow = headerRow.querySelector('.toggle-arrow');
+            if (arrow) arrow.classList.add('rotate-180');
+        }
+    });
+}
 
 function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
     const { schedule } = scheduleInfo;
@@ -412,8 +381,6 @@ function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
         const itemId = item.id || item.batchId;
         if (processedItems.has(itemId) || !schedule[item.machine]) return;
         
-        // --- DIT IS DE GECORRIGEERDE LOGICA ---
-        // Zoek in de nieuwe, vereenvoudigde datastructuur
         const allDates = Object.keys(schedule[item.machine])
             .filter(dateStr => {
                 const daySchedule = schedule[item.machine][dateStr];
@@ -425,7 +392,6 @@ function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
         if (allDates.length === 0) return;
         processedItems.add(itemId);
 
-        // De logica voor het groeperen van dagen blijft hetzelfde
         let segmentStart = allDates[0];
         for (let i = 1; i < allDates.length; i++) {
             const diffDays = (allDates[i] - allDates[i - 1]) / msPerDay;
@@ -447,32 +413,26 @@ function calculateSpanningBlocks(scheduleInfo, gridStartDate) {
         });
 }
 
-// js/ui.js
-
 function renderPlanningGrid(scheduleInfo) {
     const { conflicts, deadlineInfo } = scheduleInfo;
     domElements.planningContainer.innerHTML = '';
-
     const grid = document.createElement('div');
     grid.className = 'planning-grid';
     const gridStartDate = new Date(state.planningStartDate);
     gridStartDate.setHours(0, 0, 0, 0);
 
     const machineRenderInfo = new Map();
-    // --- CORRECTIE: Start de machines na de 6 rijen van de headers ---
     let currentRow = 5;
     state.machines.forEach(machine => {
-        // Elke machine krijgt nu dezelfde behandeling
         machineRenderInfo.set(machine.name, { startRow: currentRow });
-        currentRow += 2; // Elke machine-rij is 2 basis-rijen hoog
+        currentRow += 2;
     });
 
-    // Headers renderen (met aangepaste row-spans)
     const todayString = utils.formatDateToYMD(new Date());
     const monthSpans = {}, weekSpans = {};
     let currentDate = new Date(gridStartDate);
     for (let i = 0; i < 21; i++) {
-        const monthYear = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const monthYear = currentDate.toLocaleDateString('nl-BE', { month: 'long', year: 'numeric' });
         const week = utils.getWeekNumber(currentDate);
         if (!monthSpans[monthYear]) monthSpans[monthYear] = 0;
         monthSpans[monthYear]++;
@@ -481,41 +441,34 @@ function renderPlanningGrid(scheduleInfo) {
         weekSpans[weekKey]++;
         currentDate.setDate(currentDate.getDate() + 1);
     }
-
     Object.entries(monthSpans).forEach(([month, span], index) => {
         const cell = document.createElement('div');
         cell.className = 'grid-header month-header';
         cell.textContent = month.charAt(0).toUpperCase() + month.slice(1);
         cell.style.gridColumn = `${Object.values(monthSpans).slice(0, index).reduce((a, b) => a + b, 0) + 2} / span ${span}`;
-        // --- CORRECTIE: Laat de maand-header 2 rijen overspannen ---
         cell.style.gridRow = '1 / span 1';
         grid.appendChild(cell);
     });
-
     Object.entries(weekSpans).forEach(([week, span], index) => {
         const cell = document.createElement('div');
         cell.className = 'grid-header week-header';
         cell.textContent = week;
         cell.style.gridColumn = `${Object.values(weekSpans).slice(0, index).reduce((a, b) => a + b, 0) + 2} / span ${span}`;
-        // --- CORRECTIE: Plaats week-header op rij 3 en laat 2 rijen overspannen ---
         cell.style.gridRow = '2 / span 1.5';
         grid.appendChild(cell);
     });
-
     currentDate = new Date(gridStartDate);
     for (let i = 0; i < 21; i++) {
         const cell = document.createElement('div');
         cell.className = 'grid-header day-header';
-        cell.innerHTML = `${currentDate.getDate()}<br>${currentDate.toLocaleDateString('en-US', { weekday: 'short' })}`;
+        cell.innerHTML = `${currentDate.getDate()}<br>${currentDate.toLocaleDateString('nl-BE', { weekday: 'short' })}`;
         if (utils.formatDateToYMD(currentDate) === todayString) cell.classList.add('today');
         cell.style.gridColumn = i + 2;
-        // --- CORRECTIE: Plaats dag-header op rij 5 en laat 2 rijen overspannen ---
         cell.style.gridRow = '3 / span 2';
         grid.appendChild(cell);
         currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Render de machine-rijen en cellen (deze logica was al correct)
     state.machines.forEach(machine => {
         const renderInfo = machineRenderInfo.get(machine.name);
         
@@ -536,11 +489,9 @@ function renderPlanningGrid(scheduleInfo) {
             dayCell.dataset.date = utils.formatDateToYMD(cellDate);
             dayCell.dataset.machine = machine.name;
 
-            // --- HIER IS HET VOLLEDIGE BLOK VOOR DE AFWEZIGHEDEN ---
             const currentDateForAbsenceCheck = new Date(dayCell.dataset.date + 'T12:00:00Z');
             let isAbsence = false;
             let absenceReason = '';
-
             for (const abs of state.absences) {
                 const start = new Date(abs.start + 'T00:00:00Z');
                 const end = new Date(abs.end + 'T23:59:59Z');
@@ -550,12 +501,10 @@ function renderPlanningGrid(scheduleInfo) {
                     break;
                 }
             }
-
             if (isAbsence) {
                 dayCell.classList.add('absence-cell');
                 dayCell.title = `Afwezig: ${absenceReason}`;
             }
-            // --- EINDE BLOK AFWEZIGHEDEN ---
 
             dayCell.style.gridRow = `${renderInfo.startRow} / span 2`;
             dayCell.style.gridColumn = j + 2;
@@ -564,7 +513,6 @@ function renderPlanningGrid(scheduleInfo) {
         }
     });
 
-    // Plaats de blokken op de juiste (sub-)rij (deze logica was al correct)
     const plannableItems = getPlannableItems();
     const spanningBlocks = calculateSpanningBlocks(scheduleInfo, gridStartDate);
     spanningBlocks.forEach(blockInfo => {
@@ -576,20 +524,31 @@ function renderPlanningGrid(scheduleInfo) {
 
         const order = state.orders.find(o => o.id === item.orderId);
         if (!order) return;
+        
         const parentPart = findPart(item.parentId || item.id);
         if (!parentPart) return;
 
         const orderBlock = document.createElement('div');
-        let blockRow = renderInfo.startRow;
         
         let sum = 0;
         for (let i = 0; i < order.id.length; i++) sum += order.id.charCodeAt(i);
         const colorIndex = (sum % 5) + 1;
-        const materialClass = item.materialStatus !== 'Available' ? 'material-missing' : '';
+
+        let materialClass = '';
+        switch (item.materialStatus) {
+            case 'Not Available':
+                materialClass = 'material-unavailable';
+                break;
+            case 'Ordered':
+                materialClass = 'material-ordered';
+                break;
+        }
+        
         const isConflict = conflicts.has(item.id || item.batchId);
         const urgentClass = order.isUrgent ? 'urgent-block' : '';
-        const deadlineMissedClass = deadlineInfo.get(order.id) ? 'deadline-missed-block' : '';
+        const deadlineMissedClass = deadlineInfo.get(item.id || item.batchId) ? 'deadline-missed-block' : '';
         const conflictClass = isConflict ? 'order-conflict' : `color-${colorIndex}`;
+        
         orderBlock.className = `order-block ${materialClass} ${conflictClass} ${urgentClass} ${deadlineMissedClass}`;
         orderBlock.draggable = true;
         orderBlock.dataset.itemId = item.id || item.batchId;
@@ -597,14 +556,19 @@ function renderPlanningGrid(scheduleInfo) {
         orderBlock.style.gridRow = `${renderInfo.startRow} / span 2`;
         orderBlock.style.gridColumn = `${blockInfo.startColumn} / span ${blockInfo.span}`;
 
-        let blockIdDisplay;
+        let blockIdDisplay = (item.id || item.batchId).slice(-5);
         if (item.parentId) {
-            blockIdDisplay = `${item.parentId.slice(-5)}/${(item.id || item.batchId).substring((item.id || item.batchId).lastIndexOf('-') + 2)}`;
-        } else {
-            blockIdDisplay = (item.id || item.batchId).slice(-5);
+             blockIdDisplay = `${item.parentId.slice(-5)}/${(item.id || item.batchId).substring((item.id || item.batchId).lastIndexOf('-') + 2)}`;
         }
-        orderBlock.innerHTML = `<span>${blockIdDisplay}</span>`; // shiftIcon is verwijderd
-        orderBlock.title = `${parentPart.partName} (${item.id || item.batchId}) - ${order.customer}`;
+        
+        orderBlock.innerHTML = `<span>${blockIdDisplay}</span>`;
+        // Creëer een meer gedetailleerde tooltip
+        orderBlock.title = `Klant: ${order.customer}
+        Order: ${order.id}
+        Onderdeel: ${parentPart.partName}
+        Batch: ${item.id || item.batchId}
+        Aantal: ${item.quantity} stuks
+        Duur: ${item.totalHours.toFixed(1)} uur`;
         grid.appendChild(orderBlock);
     });
 
@@ -670,7 +634,6 @@ function renderMachineLoad(loadData) {
     });
 }
 
-// --- MODAL & FORM FUNCTIES ---
 export function createNewPartForm(container, deadline) {
     partCounter++;
     const partDiv = document.createElement('div');
@@ -764,7 +727,6 @@ export function openEditModal(orderId) {
         partDiv.className = 'part-entry edit-part-entry border p-4 rounded-md'; 
         partDiv.dataset.partId = part.id;
         
-        // --- Logica om de velden correct vooraf in te vullen ---
         const isChecked = part.needsPostProcessing ? 'checked' : '';
         const daysValue = part.postProcessingDays || 7;
         const daysContainerClass = part.needsPostProcessing ? '' : 'hidden';
@@ -805,9 +767,8 @@ export function openEditModal(orderId) {
                 <div></div>
             `;
         }
-        partHTML += `</div>`; // Einde van de eerste grid div
+        partHTML += `</div>`;
         
-        // --- Toevoeging van de nabehandeling-velden ---
         partHTML += `
             <div class="border-t pt-4 flex items-center space-x-4">
                  <div class="flex items-center">
@@ -828,7 +789,6 @@ export function openEditModal(orderId) {
     domElements.editOrderModal.classList.remove('hidden');
 }
 
-// --- ABSENCE MODAL LOGIC ---
 export function openAbsenceModal() {
     absenceStartDate = null;
     absenceEndDate = null;
@@ -934,8 +894,6 @@ export function navigateCalendar(direction) {
     renderAbsenceCalendar();
 }
 
-
-// --- MODAL CONFIRMATION LOGIC ---
 export function openConfirmModal(title, text, onConfirm, buttonText = 'Yes, delete', intent = 'destructive') {
     domElements.deleteConfirmTitle.textContent = title;
     domElements.deleteConfirmText.textContent = text;

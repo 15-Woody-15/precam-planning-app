@@ -30,7 +30,7 @@ async function initializeApp() {
                     // Als een onderdeel geen 'batches' array heeft, is het een oud onderdeel.
                     // We zetten het om naar de nieuwe structuur.
                     if (!part.batches) {
-                        console.log(`Migrating old part to new structure: ${part.id}`); // Handig voor debuggen
+                        console.log(`Migrating old part to new structure: ${part.id}`);
                         
                         part.totalQuantity = part.quantity || 0;
                         part.batches = [{
@@ -39,6 +39,11 @@ async function initializeApp() {
                             deadline: part.deadline || order.deadline,
                             totalHours: part.totalHours || 0,
                             status: part.status || 'To Be Planned',
+                            
+                            // --- VOEG DEZE REGEL TOE ---
+                            materialStatus: part.materialStatus || 'Not Available',
+                            // --- EINDE TOEGEVOEGDE REGEL ---
+
                             machine: part.machine || null,
                             startDate: part.startDate || null,
                             shift: part.shift || 8

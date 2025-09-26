@@ -299,9 +299,30 @@ body {
 
 .order-block:active { cursor: grabbing; }
 
-.material-missing {
-    opacity: 0.6;
-    background: repeating-linear-gradient(45deg, currentColor, currentColor 4px, rgba(255, 255, 255, 0.2) 4px, rgba(255, 255, 255, 0.2) 8px);
+/* Stijl voor BESTELD materiaal (de huidige arcering over de orderkleur) */
+.material-ordered {
+    opacity: 0.8;
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.2),
+        rgba(0, 0, 0, 0.2) 10px,
+        transparent 10px,
+        transparent 20px
+    );
+}
+
+/* NIEUW: Stijl voor NIET BESCHIKBAAR materiaal (grijs blok met donkere arcering) */
+.material-unavailable {
+    background-color: #6b7280 !important; /* Tailwind's gray-500 */
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.3),
+        rgba(0, 0, 0, 0.3) 10px,
+        transparent 10px,
+        transparent 20px
+    );
+    color: white !important;
+    opacity: 0.9;
 }
 
 .order-conflict {

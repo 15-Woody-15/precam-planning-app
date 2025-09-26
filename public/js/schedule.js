@@ -1,12 +1,8 @@
-// js/schedule.js
+// js/schedule.js - DEFINITIEVE, GECORRIGEERDE VERSIE
 
-import { state, findPart, findBatch, getPlannableItems } from './state.js';
+import { state, getPlannableItems } from './state.js';
 import * as utils from './utils.js';
 
-/**
- * Berekent het volledige productieschema en detecteert conflicten.
- * Werkt nu met een vereenvoudigde datastructuur zonder dag/nacht splitsing.
- */
 export function buildScheduleAndDetectConflicts() {
     const schedule = {};
     const conflicts = new Map();
@@ -37,8 +33,11 @@ export function buildScheduleAndDetectConflicts() {
             }
             const daySchedule = schedule[item.machine][dateString];
             
-            const dayCapacity = item.shift === 24 ? 24 : 8;
+            let dayCapacity = 8;
+            if (item.shift === 24) dayCapacity = 24;
+            else if (item.shift === 16) dayCapacity = 16;
 
+            // --- DE FIX: Sla het weekend alleen over voor 8-uurs shifts ---
             if (item.shift === 8 && (currentDate.getDay() === 6 || currentDate.getDay() === 0)) {
                 currentDate.setDate(currentDate.getDate() + 1);
                 continue;
@@ -65,38 +64,29 @@ export function buildScheduleAndDetectConflicts() {
         });
     });
 
-    // Deadline-controle (deze logica was al correct)
     const allPlannableItems = getPlannableItems();
-    state.orders.forEach(order => {
-        let orderWillMissDeadline = false;
-        const itemsInOrder = allPlannableItems.filter(i => i.orderId === order.id);
-        
-        itemsInOrder.forEach(item => {
-            const scheduleInfo = partScheduleInfo.get(item.id || item.batchId);
-            if (scheduleInfo && scheduleInfo.actualEndDate && item.deadline) {
-                const endDate = scheduleInfo.actualEndDate;
-                const deadlineDate = new Date(item.deadline + 'T23:59:59');
-                if (endDate > deadlineDate) {
-                    orderWillMissDeadline = true;
-                }
+    allPlannableItems.forEach(item => {
+        const scheduleInfo = partScheduleInfo.get(item.id || item.batchId);
+        if (scheduleInfo && scheduleInfo.actualEndDate && item.productionDeadline) {
+            const endDate = scheduleInfo.actualEndDate;
+            const deadlineDate = new Date(item.productionDeadline + 'T23:59:59');
+            if (endDate > deadlineDate) {
+                deadlineInfo.set(item.id || item.batchId, true);
             }
-        });
-        if (orderWillMissDeadline) {
-            deadlineInfo.set(order.id, true);
         }
     });
 
-    // --- DIT IS DE GECORRIGEERDE CONFLICT-DETECTIE ---
     for (const machineName in schedule) {
-        const machine = state.machines.find(m => m.name === machineName);
-        if (!machine) continue;
-
         for (const date in schedule[machineName]) {
             const daySchedule = schedule[machineName][date];
-            const capacity = machine.hasRobot ? 24 : 8; // Bepaal capaciteit op basis van robot
-            
-            // Controleer of de totale uren de dagcapaciteit overschrijden
-            if (daySchedule.totalHours > capacity + 0.01) {
+            if (daySchedule.parts.length === 0) continue;
+
+            const partIdsOnDay = daySchedule.parts.map(p => p.partId);
+            const itemsOnDay = allPlannableItems.filter(item => partIdsOnDay.includes(item.id || item.batchId));
+            const maxShift = Math.max(...itemsOnDay.map(item => item.shift || 8));
+            const dayCapacity = maxShift;
+
+            if (daySchedule.totalHours > dayCapacity + 0.01) {
                 daySchedule.parts.forEach(p => {
                     const conflictingParts = daySchedule.parts.map(p2 => p2.partId).filter(id => id !== p.partId);
                     conflicts.set(p.partId, conflictingParts);
@@ -108,16 +98,13 @@ export function buildScheduleAndDetectConflicts() {
     return { schedule, conflicts, partScheduleInfo, deadlineInfo };
 }
 
-
-/**
- * Berekent de machinebelasting per week.
- */
 export function calculateMachineLoad(scheduleInfo, gridStartDate) {
     const { schedule } = scheduleInfo;
     const loadData = {};
 
     const getMachineWeeklyCapacity = (machine) => {
         if (machine.hasRobot) return 7 * 24;
+        if (machine.name.includes('DMU')) return 5 * 16;
         return 5 * 8;
     };
 
@@ -133,7 +120,6 @@ export function calculateMachineLoad(scheduleInfo, gridStartDate) {
         }
     }
 
-    // --- DIT IS DE GECORRIGEERDE BEREKENING ---
     for (const machineName in schedule) {
         for (const dateString in schedule[machineName]) {
             const d = new Date(dateString + 'T00:00:00');
@@ -141,7 +127,6 @@ export function calculateMachineLoad(scheduleInfo, gridStartDate) {
             const daySchedule = schedule[machineName][dateString];
 
             if (loadData[week] && loadData[week][machineName]) {
-                // Gebruik direct de 'totalHours' van de vereenvoudigde structuur
                 loadData[week][machineName].scheduled += daySchedule.totalHours;
             }
         }

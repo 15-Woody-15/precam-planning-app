@@ -1,12 +1,49 @@
 // js/planningGridEvents.js
 
-import { state, findPart, findBatch } from './state.js';
+import { state } from './state.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import * as utils from './utils.js';
+import { MATERIAL_STATUS } from './constants.js'; // <-- IMPORT TOEGEVOEGD
 
 export function initializePlanningGridEventListeners() {
     if (!ui.domElements.planningContainer) return;
+
+    // --- NIEUW: CLICK EVENT LISTENER VOOR MATERIAALSTATUS ---
+    ui.domElements.planningContainer.addEventListener('click', async (e) => {
+        const targetBlock = e.target.closest('.order-block');
+        if (!targetBlock) return;
+
+        // Voorkom dat de popup opent als we alleen de status willen wijzigen
+        e.stopPropagation();
+
+        const itemId = targetBlock.dataset.itemId;
+        const context = utils.findItemContextById(itemId);
+        if (!context) return;
+
+        const { item, order: parentOrder } = context;
+
+        // 'Fiets' door de statussen: Not Available -> Ordered -> Available -> Not Available
+        const currentStatus = item.materialStatus || 'Not Available';
+        const currentIndex = MATERIAL_STATUS.indexOf(currentStatus);
+        const nextIndex = (currentIndex + 1) % MATERIAL_STATUS.length;
+        const newStatus = MATERIAL_STATUS[nextIndex];
+
+        item.materialStatus = newStatus;
+
+        utils.showLoadingOverlay(ui.domElements.loadingOverlay);
+        try {
+            // Sla de wijziging op en herteken alles voor een correcte weergave
+            await api.updateOrderOnBackend(parentOrder.id, parentOrder);
+            ui.renderAll();
+            utils.showNotification(`Materiaalstatus voor ${itemId} is nu '${newStatus}'.`, 'success', ui.domElements.notificationContainer);
+        } catch (error) {
+            utils.showNotification(`Kon materiaalstatus niet opslaan: ${error.message}`, 'error', ui.domElements.notificationContainer);
+        } finally {
+            utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
+        }
+    });
+    // --- EINDE NIEUWE CODE ---
 
     let lastDragOverCell = null;
 
@@ -77,25 +114,9 @@ export function initializePlanningGridEventListeners() {
             const newMachineName = targetCell.dataset.machine;
             
             if (item && newDate && newMachineName) {
-                const machineInfo = state.machines.find(m => m.name === newMachineName);
-                const shiftType = targetCell.dataset.shifttype;
-
-                if (shiftType === 'Night' && (!machineInfo || !machineInfo.hasRobot)) {
-                    utils.showNotification("Kan niet in nacht plannen: machine heeft geen robot.", "error", ui.domElements.notificationContainer);
-                    return;
-                }
-                
-                item.shiftPreference = shiftType || 'Day';
                 item.startDate = newDate;
                 item.machine = newMachineName;
                 item.status = 'Scheduled'; 
-                
-                if (machineInfo) {
-                    const is24hAllowed = machineInfo.hasRobot;
-                    const is16hAllowed = machineInfo.name.includes('DMU');
-                    if (item.shift === 24 && !is24hAllowed) item.shift = 8;
-                    if (item.shift === 16 && !is16hAllowed) item.shift = 8;
-                }
                 
                 ui.renderAll();
                 
@@ -155,7 +176,6 @@ export function initializePlanningGridEventListeners() {
             item.machine = null;
             item.startDate = null;
             item.status = 'To Be Planned';
-            item.shiftPreference = 'Day'; // Reset preference
 
             utils.showLoadingOverlay(ui.domElements.loadingOverlay);
             try {
