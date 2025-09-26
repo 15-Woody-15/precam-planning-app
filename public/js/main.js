@@ -58,6 +58,7 @@ async function initializeApp() {
         const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); 
         state.planningStartDate = new Date(today.setDate(diff));
         state.planningStartDate.setHours(0, 0, 0, 0);
+        state.machineLoadWeek = null; // Reset de weekkeuze bij elke refresh
 
         ui.renderAll();
 

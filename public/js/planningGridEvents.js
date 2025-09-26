@@ -9,41 +9,17 @@ import { MATERIAL_STATUS } from './constants.js'; // <-- IMPORT TOEGEVOEGD
 export function initializePlanningGridEventListeners() {
     if (!ui.domElements.planningContainer) return;
 
-    // --- NIEUW: CLICK EVENT LISTENER VOOR MATERIAALSTATUS ---
-    ui.domElements.planningContainer.addEventListener('click', async (e) => {
+    ui.domElements.planningContainer.addEventListener('click', (e) => {
         const targetBlock = e.target.closest('.order-block');
         if (!targetBlock) return;
-
-        // Voorkom dat de popup opent als we alleen de status willen wijzigen
-        e.stopPropagation();
 
         const itemId = targetBlock.dataset.itemId;
         const context = utils.findItemContextById(itemId);
         if (!context) return;
 
-        const { item, order: parentOrder } = context;
-
-        // 'Fiets' door de statussen: Not Available -> Ordered -> Available -> Not Available
-        const currentStatus = item.materialStatus || 'Not Available';
-        const currentIndex = MATERIAL_STATUS.indexOf(currentStatus);
-        const nextIndex = (currentIndex + 1) % MATERIAL_STATUS.length;
-        const newStatus = MATERIAL_STATUS[nextIndex];
-
-        item.materialStatus = newStatus;
-
-        utils.showLoadingOverlay(ui.domElements.loadingOverlay);
-        try {
-            // Sla de wijziging op en herteken alles voor een correcte weergave
-            await api.updateOrderOnBackend(parentOrder.id, parentOrder);
-            ui.renderAll();
-            utils.showNotification(`Materiaalstatus voor ${itemId} is nu '${newStatus}'.`, 'success', ui.domElements.notificationContainer);
-        } catch (error) {
-            utils.showNotification(`Kon materiaalstatus niet opslaan: ${error.message}`, 'error', ui.domElements.notificationContainer);
-        } finally {
-            utils.hideLoadingOverlay(ui.domElements.loadingOverlay);
-        }
+        // Roep de popup aan en geef de specifieke batch-ID mee om te markeren
+        ui.openOrderDetailsModal(context.order.id, itemId);
     });
-    // --- EINDE NIEUWE CODE ---
 
     let lastDragOverCell = null;
 

@@ -49,10 +49,12 @@ export function initializeDOMElements() {
 export function renderAll() {
     const scheduleInfo = schedule.buildScheduleAndDetectConflicts();
     const machineLoadInfo = schedule.calculateMachineLoad(scheduleInfo, state.planningStartDate);
+    
     if (state.machineLoadWeek === null) {
-        const firstWeek = utils.getWeekNumber(state.planningStartDate);
-        if (machineLoadInfo[firstWeek]) state.machineLoadWeek = firstWeek;
+        // Deze regel zet de standaard week correct in.
+        state.machineLoadWeek = utils.getWeekNumber(state.planningStartDate);
     }
+
     renderMachineLoad(machineLoadInfo);
     renderCustomerDropdown();
     renderOrderList(scheduleInfo);
@@ -120,9 +122,11 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
         }
     });
 
-    const conflictIcon = `<svg class="inline-block h-5 w-5 text-red-500" title="Conflict detected" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.031-1.742 3.031H4.42c-1.532 0-2.492-1.697-1.742-3.031l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>`;
-    const delayedIcon = `<svg class="inline-block h-5 w-5 text-yellow-500" title="One or more parts have a delayed start" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>`;
-    const deadlineMissedIcon = `<svg class="inline-block h-5 w-5 text-red-600" title="Deadline will be missed!" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5H10.75V5z" clip-rule="evenodd" /></svg>`;
+    // --- DE FIX: Correcte SVG-codes voor de icoontjes ---
+    const conflictIcon = `<svg class="inline-block h-5 w-5 text-red-500" title="Conflict gedetecteerd" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.031-1.742 3.031H4.42c-1.532 0-2.492-1.697-1.742-3.031l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>`;
+    const delayedIcon = `<svg class="inline-block h-5 w-5 text-yellow-500" title="Eén of meerdere onderdelen hebben een vertraagde start" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>`;
+    const deadlineMissedIcon = `<svg class="inline-block h-5 w-5 text-red-600" title="Deadline wordt gemist!" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5H10.75V5z" clip-rule="evenodd" /></svg>`;
+    // --- EINDE FIX ---
     
     sortedOrders.forEach(order => {
         const overallStatus = utils.getOverallOrderStatus(order);
@@ -144,7 +148,7 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
         const orderHasConflict = itemIds.some(id => conflicts.has(id));
         const totalOrderHours = plannableItemsForOrder.reduce((sum, item) => sum + (item.totalHours || 0), 0);
         const orderHasDelayedParts = itemIds.some(id => partScheduleInfo.get(id)?.isDelayed);
-        const willMissDeadline = deadlineInfo.get(order.id);
+        const willMissDeadline = itemIds.some(id => deadlineInfo.has(id));
 
         if (orderHasConflict) groupTr.style.borderLeft = '4px solid #ef4444';
         else if (orderHasDelayedParts) groupTr.style.borderLeft = '4px solid #f59e0b';
@@ -174,6 +178,7 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
             case 'To Be Planned': overallStatusBadge = `<span class="status-badge status-tbp">To Be Planned</span>`; break;
         }
 
+        // --- DE FIX: Logica voor vlammetje hersteld ---
         groupTr.innerHTML = `
             <td class="px-3 py-3 whitespace-nowrap">
                 <div class="flex items-center">
@@ -204,6 +209,8 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
                  </div>
             </td>
         `;
+        // --- EINDE FIX ---
+        
         domElements.orderList.appendChild(groupTr);
         
         const commentRowTr = document.createElement('tr');
@@ -214,13 +221,35 @@ export function renderOrderList({ conflicts, partScheduleInfo, deadlineInfo }) {
     });
 }
 
-export function openOrderDetailsModal(orderId) {
+export function openOrderDetailsModal(orderId, highlightedBatchId = null) {
     document.body.classList.add('no-scroll');
     const order = state.orders.find(o => o.id === orderId);
     if (!order) return;
     domElements.detailsOrderId.textContent = order.id;
     renderOrderDetails(order);
     domElements.orderDetailsModal.classList.remove('hidden');
+
+    // --- NIEUW: SCROLL & HIGHLIGHT LOGICA ---
+    if (highlightedBatchId) {
+        const batchRow = domElements.orderDetailsContent.querySelector(`tr[data-batch-id="${highlightedBatchId}"]`);
+        if (batchRow) {
+            // Zorg ervoor dat het bovenliggende onderdeel is uitgeklapt
+            const partId = batchRow.dataset.parentPartId;
+            if (partId && !state.expandedPartsInModal.has(partId)) {
+                const headerRow = domElements.orderDetailsContent.querySelector(`tr[data-part-id="${partId}"]`);
+                headerRow?.click(); // Simuleer een klik om de rij uit te klappen
+            }
+
+            // Scroll naar de rij en geef een tijdelijke markering
+            setTimeout(() => {
+                batchRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                batchRow.classList.add('bg-yellow-100', 'dark:bg-yellow-800/30', 'transition-all', 'duration-1000');
+                setTimeout(() => {
+                    batchRow.classList.remove('bg-yellow-100', 'dark:bg-yellow-800/30');
+                }, 2500);
+            }, 100); // Kleine vertraging om zeker te zijn dat alles zichtbaar is
+        }
+    }
 }
 
 export function renderOrderDetails(order) {
@@ -252,6 +281,13 @@ export function renderOrderDetails(order) {
         const completedBatches = batches.filter(b => b.status === 'Completed');
         const completedQuantity = completedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
         
+        // --- NIEUW: Bepaal of dit specifieke onderdeel aandacht nodig heeft ---
+        const partRequiresAttention = batches.some(batch => 
+            (batch.materialStatus && batch.materialStatus !== 'Available') || batch.status === 'To Be Planned'
+        );
+        const attentionIcon = `<span class="mr-2" title="Actie vereist voor deze groep">🚩</span>`;
+        // --- EINDE NIEUWE CODE ---
+
         const partTr = document.createElement('tr');
         partTr.className = 'part-header-row bg-gray-50 dark:bg-gray-700 font-semibold cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600';
         partTr.dataset.partId = part.id;
@@ -260,6 +296,7 @@ export function renderOrderDetails(order) {
             <td class="px-4 py-3 whitespace-nowrap" colspan="2">
                 <div class="flex items-center">
                     <svg class="toggle-arrow w-5 h-5 mr-2 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    ${partRequiresAttention ? attentionIcon : ''}
                     <span>${part.partName} (${part.id})</span>
                 </div>
             </td>
@@ -279,6 +316,7 @@ export function renderOrderDetails(order) {
         tbody.appendChild(partTr);
 
         if (batches.length > 0) {
+            // De code voor het tonen van de individuele batch-rijen blijft ongewijzigd
             batches.forEach(item => {
                 const tr = document.createElement('tr');
                 const itemId = item.batchId;
@@ -299,7 +337,6 @@ export function renderOrderDetails(order) {
                     default: statusBadge = `<span class="status-badge status-tbp">To Be Planned</span>`;
                 }
                 
-                // --- NIEUWE LOGICA: HTML voor de ENKELE materiaal-knop ---
                 const currentStatus = item.materialStatus || 'Not Available';
                 let buttonClass = '';
                 switch (currentStatus) {
@@ -308,7 +345,6 @@ export function renderOrderDetails(order) {
                     case 'Not Available': buttonClass = 'bg-red-600 hover:bg-red-700 text-white'; break;
                 }
                 const materialButtonHTML = `<button type="button" class="material-status-cycler w-full text-xs font-bold py-1 px-2 rounded-md transition ${buttonClass}" ${dataAttribute}>${currentStatus}</button>`;
-                // --- EINDE NIEUWE LOGICA ---
 
                 const selectedMachine = state.machines.find(m => m.name === item.machine);
                 let shiftOptions = `<option value="8" ${item.shift === 8 ? 'selected': ''}>Dag (8u)</option>`;
@@ -322,8 +358,7 @@ export function renderOrderDetails(order) {
                 const startDateInputClass = `start-date-input ${isDelayed ? 'delayed-start' : ''}`;
                 const startDateTitle = isDelayed ? `Waarschuwing: Actuele start is ${new Date(info.actualStartDate).toLocaleDateString('nl-BE')}` : '';
 
-                let actionButtonsHTML = `...`; // Dit wordt hieronder correct opgebouwd
-                actionButtonsHTML = `
+                let actionButtonsHTML = `
                     <div class="relative action-dropdown">
                         <button class="toggle-action-dropdown p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600">
                             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
