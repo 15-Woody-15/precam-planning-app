@@ -315,8 +315,9 @@ app.post('/api/machines/replace', async (req, res) => {
     }
 });
 
-// --- START SERVER ---
-app.listen(PORT, () => {
+// --- START SERVER CORRECTIE ---
+app.listen(PORT, '0.0.0.0', () => { // Luister op alle interfaces (0.0.0.0)
   console.log(`Server is running on port ${PORT}`);
   initializeDatabase();
 });
+// --- EINDE CORRECTIE ---
