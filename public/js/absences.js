@@ -3,14 +3,6 @@ import * as api from './api.js';
 import * as utils from './utils.js';
 
 /**
- * Haalt de actuele afwezigheden op uit de centrale state.
- * @returns {Absence[]} Een array met afwezigheid-objecten.
- */
-export function getAbsences() {
-    return state.absences;
-}
-
-/**
  * Voegt een nieuwe afwezigheid toe via de API en update de state.
  * @param {object} absence - Het afwezigheid-object om toe te voegen.
  */

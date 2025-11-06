@@ -1,14 +1,20 @@
 // js/orderListEvents.js
 
 import { state, saveStateToLocalStorage } from './state.js';
-import * as ui from './ui.js';
+// Dit is de correcte, volledige import-lijst voor ui.js
+import { domElements, renderAll, renderCustomerDropdown } from './ui.js';
 import * as api from './api.js';
 import * as utils from './utils.js';
-import * as schedule from './schedule.js';
-import { findItemContext } from './utils.js'; // De nieuwe, centrale import
+import { findItemContext } from './utils.js';
+// Dit zijn de imports voor de modals die we aanroepen
+import { openConfirmModal } from './modals/confirmModal.js';
+import { openEditModal } from './modals/orderModal.js';
+import { openOrderDetailsModal } from './modals/detailsModal.js';
+
 
 export function initializeOrderListEventListeners() {
-    if (!ui.domElements.orderList) return;
+    // 'ui.' prefix is hier en overal hieronder verwijderd
+    if (!domElements.orderList) return;
 
     const debouncedCommentSave = utils.debounce(async (order, textareaElement) => {
         textareaElement.classList.add('saving');
@@ -32,22 +38,58 @@ export function initializeOrderListEventListeners() {
         }
     }, 1000);
 
-    ui.domElements.orderList.addEventListener('keyup', (e) => {
-        const target = e.target;
+    domElements.orderList.addEventListener('input', (e) => {
+        const target = e.target; // Dit is de <textarea>
         if (target.classList.contains('comment-input')) {
-            const orderId = target.closest('tr').dataset.orderId;
+            const commentRow = target.closest('tr');
+            const orderId = commentRow.dataset.orderId;
             const order = state.orders.find(o => o.id === orderId);
+            
             if (order) {
+                // Sla de comment op
                 order.comment = target.value;
                 debouncedCommentSave(order, target);
+
+                // --- DIT IS DE OPLOSSING MET TWEE ICONEN ---
+
+                // 1. Vind de header-rij via zijn unieke data-attribuut
+                const headerRow = domElements.orderList.querySelector(`tr.order-group-row[data-order-id="${orderId}"]`);
+
+                if (headerRow) {
+                    const commentBtn = headerRow.querySelector('.comment-toggle-btn');
+                    if (commentBtn) {
+                        const hasComment = order.comment && order.comment.trim() !== '';
+
+                        // 2. Vind de iconen *binnen* de knop
+                        const iconEmpty = commentBtn.querySelector('.icon-empty');
+                        const iconFilled = commentBtn.querySelector('.icon-filled');
+
+                        if (iconEmpty && iconFilled) {
+                            // 3. Wissel de 'hidden' klasse
+                            iconEmpty.classList.toggle('hidden', hasComment);
+                            iconFilled.classList.toggle('hidden', !hasComment);
+                        }
+
+                        // 4. Update de titel
+                        if (hasComment) {
+                            commentBtn.title = 'Bekijk/wijzig opmnerking';
+                        } else {
+                            commentBtn.title = 'Voeg opmerking toe';
+                        }
+                    }
+                }
+                // --- EINDE OPLOSSING ---
             }
         }
     });
 
-    ui.domElements.orderList.addEventListener('click', async (e) => {
+    domElements.orderList.addEventListener('click', async (e) => {
         const target = e.target;
-        
+        // console.log("Geklikt element:", target); // Debug-regel is nu verwijderd
+
         // --- CONTROLEER EERST ALLE SPECIFIEKE KNOPPEN ---
+        
+        // 1. Urgentie-knop
         if (target.classList.contains('toggle-urgent-btn')) {
             e.stopPropagation();
             const orderId = target.dataset.orderId;
@@ -55,43 +97,53 @@ export function initializeOrderListEventListeners() {
             if (order) {
                 order.isUrgent = target.checked;
                 await api.updateOrderOnBackend(order.id, order);
-                ui.renderAll();
+                renderAll();
             }
             return;
         }
         
+        // 2. Edit-knop
         const editOrderBtn = target.closest('.edit-order-btn');
         if(editOrderBtn){
             e.stopPropagation();
-            ui.openEditModal(editOrderBtn.dataset.orderId);
+            renderCustomerDropdown(); 
+            openEditModal(editOrderBtn.dataset.orderId);
             return;
         }
 
+        // 3. Archiveer-knop
         const archiveBtn = target.closest('.archive-btn');
         if (archiveBtn) {
             e.stopPropagation();
             const orderId = archiveBtn.dataset.orderId;
-            // Dit is de aangepaste aanroep naar de pop-up
-            ui.openConfirmModal(
+            openConfirmModal(
                 'Order Archiveren',
                 `Weet je zeker dat je order "${orderId}" wilt archiveren? De order wordt dan uit deze lijst verwijderd en is terug te vinden in het archief.`,
                 async () => {
                     await api.archiveOrder(orderId);
                     state.orders = state.orders.filter(order => order.id !== orderId);
-                    ui.renderAll();
+                    renderAll();
                 },
-                'Ja, archiveer',    // <-- Nieuw: Tekst voor de knop
-                'constructive'     // <-- Nieuw: Maakt de knop groen
+                'Ja, archiveer',
+                'constructive'
             );
             return;
         }
 
+        // --- DIT IS DE NIEUWE, GECORRIGEERDE LOGICA VOOR DE COMMENTAAR-KNOP ---
+        // 4. Commentaar-knop
         const commentBtn = target.closest('.comment-toggle-btn');
         if (commentBtn) {
             e.stopPropagation();
-            const orderId = commentBtn.dataset.orderId;
-            const commentRow = ui.domElements.orderList.querySelector(`.comment-row[data-order-id="${orderId}"]`);
-            if (commentRow) {
+            
+            // 1. Vind de rij waar de knop in leeft
+            const headerRow = commentBtn.closest('.order-group-row');
+            if (!headerRow) return; // Veiligheidscheck
+
+            // 2. De commentaar-rij is de *volgende* rij in de tabel
+            const commentRow = headerRow.nextElementSibling;
+            
+            if (commentRow && commentRow.classList.contains('comment-row')) {
                 commentRow.classList.toggle('hidden');
                 if (!commentRow.classList.contains('hidden')) {
                     commentRow.querySelector('textarea').focus();
@@ -99,20 +151,22 @@ export function initializeOrderListEventListeners() {
             }
             return;
         }
+        // --- EINDE NIEUWE LOGICA ---
 
-        // --- ALS ER GEEN KNOP IS GEKLIKT, CONTROLEER DAN PAS DE HELE RIJ ---
+
+        // 5. Als er op geen enkele knop is geklikt, open de details-modal
         const groupRow = target.closest('.order-group-row');
         if (groupRow) {
             const orderId = groupRow.dataset.orderId;
             if (orderId) {
-                ui.openOrderDetailsModal(orderId);
+                openOrderDetailsModal(orderId);
             }
             return;
         }
     });
 
-    if(ui.domElements.orderListThead) {
-        ui.domElements.orderListThead.addEventListener('click', (e) => {
+    if(domElements.orderListThead) {
+        domElements.orderListThead.addEventListener('click', (e) => {
             const header = e.target.closest('.sortable-header');
             if (!header) return;
             const key = header.dataset.sortKey;
@@ -123,7 +177,7 @@ export function initializeOrderListEventListeners() {
                 state.sortOrder = 'asc';
             }
             saveStateToLocalStorage();
-            ui.renderAll();
+            renderAll();
         });
     }
 }
