@@ -16,25 +16,27 @@ let currentModalOrderId = null;
  * @param {string} [highlightedBatchId=null] - De ID van de batch die gehighlight moet worden.
  */
 export function openOrderDetailsModal(orderId, highlightedBatchId = null) {
-    currentModalOrderId = orderId;
+    currentModalOrderId = orderId; 
     document.body.classList.add('no-scroll');
     const order = state.orders.find(o => o.id === orderId);
     if (!order) return;
+
     // --- LOGICA VOOR VOLTOOIEN/HEROPENEN KNOPPEN ---
     const overallStatus = utils.getOverallOrderStatus(order);
     if (overallStatus === 'Completed') {
         domElements.completeOrderBtn.classList.add('hidden');
-        domElements.reopenOrderBtn.classList.remove('hidden'); // Toon "Heropen"
+        domElements.reopenOrderBtn.classList.remove('hidden');
     } else {
-        domElements.completeOrderBtn.classList.remove('hidden'); // Toon "Voltooi"
+        domElements.completeOrderBtn.classList.remove('hidden');
         domElements.reopenOrderBtn.classList.add('hidden');
     }
     // --- EINDE LOGICA ---
+
     domElements.detailsOrderId.textContent = order.id;
-    renderOrderDetails(order); // Roep de private render-functie hieronder aan
+    renderOrderDetails(order); 
     domElements.orderDetailsModal.classList.remove('hidden');
 
-    // --- SCROLL & HIGHLIGHT LOGICA ---
+    // --- SCROLL & HIGHLIGHT LOGICA (VEILIG INGEPAKT) ---
     if (highlightedBatchId) {
         const batchRow = domElements.orderDetailsContent.querySelector(`tr[data-batch-id="${highlightedBatchId}"]`);
         if (batchRow) {
@@ -48,13 +50,14 @@ export function openOrderDetailsModal(orderId, highlightedBatchId = null) {
             // Scroll naar de rij en geef een tijdelijke markering
             setTimeout(() => {
                 batchRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                batchRow.classList.add('bg-yellow-100', 'dark:bg-yellow-800/30', 'transition-all', 'duration-1000');
+                batchRow.classList.add('bg-yellow-100', 'transition-all', 'duration-1000');
                 setTimeout(() => {
-                    batchRow.classList.remove('bg-yellow-100', 'dark:bg-yellow-800/30');
+                    batchRow.classList.remove('bg-yellow-100');
                 }, 2500);
-            }, 100); // Kleine vertraging om zeker te zijn dat alles zichtbaar is
+            }, 100); 
         }
     }
+    // --- EINDE SCROLL & HIGHLIGHT LOGICA ---
 }
 
 /**
@@ -233,19 +236,19 @@ function renderOrderDetails(order) {
  * Initialiseert de event listeners voor de details modal.
  */
 export function initializeDetailsModalEvents() {
+    
+    // --- START: De Event Handlers op de Modals (Complete/Reopen) ---
 
-    // --- VOEG DIT HELE BLOK TOE ---
     if (domElements.completeOrderBtn) {
         domElements.completeOrderBtn.addEventListener('click', async () => {
             if (!currentModalOrderId) return;
-
+            
             const order = state.orders.find(o => o.id === currentModalOrderId);
             if (!order) {
                 utils.showNotification('Order niet gevonden.', 'error', domElements.notificationContainer);
                 return;
             }
 
-            // Vraag om bevestiging
             openConfirmModal(
                 'Order Voltooien',
                 `Weet je zeker dat je alle onderdelen van order "${order.id}" als voltooid wilt markeren?`,
@@ -263,8 +266,7 @@ export function initializeDetailsModalEvents() {
                     try {
                         await api.updateOrderOnBackend(order.id, order);
                         utils.showNotification(`Order ${order.id} is als voltooid gemarkeerd.`, 'success', domElements.notificationContainer);
-
-                        // Sluit de modal en her-render alles
+                        
                         domElements.orderDetailsModal.classList.add('hidden');
                         document.body.classList.remove('no-scroll');
                         currentModalOrderId = null;
@@ -276,34 +278,30 @@ export function initializeDetailsModalEvents() {
                     }
                 },
                 'Ja, markeer als voltooid',
-                'constructive' // Gebruikt de groene knop-stijl
+                'constructive'
             );
         });
     }
-    // --- EINDE TOEGEVOEGDE BLOK ---
 
-    // --- VOEG DIT NIEUWE BLOK TOE VOOR HEROPENEN ---
     if (domElements.reopenOrderBtn) {
         domElements.reopenOrderBtn.addEventListener('click', async () => {
             if (!currentModalOrderId) return;
-
+            
             const order = state.orders.find(o => o.id === currentModalOrderId);
             if (!order) {
                 utils.showNotification('Order niet gevonden.', 'error', domElements.notificationContainer);
                 return;
             }
 
-            // Vraag om bevestiging
             openConfirmModal(
                 'Order Heropenen',
                 `Weet je zeker dat je alle onderdelen van order "${order.id}" wilt heropenen?`,
                 async () => {
-                    // Markeer alle batches als "To Be Planned"
+                    // Markeer alle batches als geopend
                     order.parts.forEach(part => {
                         if (part.batches) {
                             part.batches.forEach(batch => {
                                 if (batch.status === 'Completed') {
-                                    // Zet terug naar 'To Be Planned' of 'Scheduled' op basis van machine
                                     batch.status = (batch.machine && batch.startDate) ? 'Scheduled' : 'To Be Planned';
                                 }
                             });
@@ -314,8 +312,7 @@ export function initializeDetailsModalEvents() {
                     try {
                         await api.updateOrderOnBackend(order.id, order);
                         utils.showNotification(`Order ${order.id} is heropend.`, 'success', domElements.notificationContainer);
-
-                        // Sluit de modal en her-render alles
+                        
                         domElements.orderDetailsModal.classList.add('hidden');
                         document.body.classList.remove('no-scroll');
                         currentModalOrderId = null;
@@ -327,11 +324,12 @@ export function initializeDetailsModalEvents() {
                     }
                 },
                 'Ja, heropen order',
-                'constructive' // Gebruikt de groene knop-stijl (of 'destructive' voor rood/geel)
+                'constructive'
             );
         });
     }
-    // --- EINDE NIEUWE BLOK ---
+
+    // --- START: De Event Handlers op de Tabel Inhoud (Veranderingen) ---
 
     if (domElements.orderDetailsContent) {
         let draggedItemElement = null;
@@ -379,38 +377,47 @@ export function initializeDetailsModalEvents() {
         // --- DE 'CHANGE' LISTENER IS NU OPGESPLITST ---
         domElements.orderDetailsContent.addEventListener('change', async (e) => {
             const target = e.target;
-
-            // --- 1. AFHANDELING VOOR PART-LEVEL PROGRAMMA CHECKBOX ---
+            const context = utils.findItemContext(target);
+            
+            // --- 1. AFHANDELING VOOR PART-LEVEL PROGRAM CHECKBOX ---
             if (target.classList.contains('program-status-checkbox')) {
                 const partId = target.dataset.partId;
                 const part = findPart(partId);
                 const order = state.orders.find(o => o.parts.some(p => p.id === partId));
-
+                
                 if (part && order) {
                     part.isProgrammed = target.checked;
+                    
+                    let saveSuccess = false; // <-- NIEUWE VLAG
+
                     utils.showLoadingOverlay(domElements.loadingOverlay);
                     try {
+                        // 1. De API-call voert de update uit
                         await api.updateOrderOnBackend(order.id, order);
-                        renderAll(); // Volledige re-render voor de orderlijst
-                        renderOrderDetails(order); // Her-render de modal
-                        utils.showNotification('Programma status bijgewerkt.', 'success', domElements.notificationContainer);
+                        saveSuccess = true; // <-- Zet de vlag ALLEEN bij succes
                     } catch (error) {
-                        utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error', domElements.notificationContainer);
+                        // 2. Toon de rode foutmelding direct bij falen
+                        utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error', domElements.notificationContainer); 
                     } finally {
                         utils.hideLoadingOverlay(domElements.loadingOverlay);
+                        
+                        // 3. Controleer de vlag om te beslissen of we de UI updaten
+                        if (saveSuccess) {
+                            // Toon de groene melding en update de UI
+                            utils.showNotification('Programma status bijgewerkt.', 'success', domElements.notificationContainer);
+                            renderAll(); 
+                            renderOrderDetails(order); // Her-render modal
+                        }
                     }
                 }
                 return; // Stop verdere uitvoering
             }
 
             // --- 2. AFHANDELING VOOR BATCH-LEVEL WIJZIGINGEN ---
-            const context = utils.findItemContext(target);
             if (!context) return;
             const { item, order: parentOrder } = context;
-
+            
             let shouldUpdateAndRender = false;
-
-            // VERWIJDER HET 'program-status-checkbox' BLOK VAN HIER
 
             if (target.classList.contains('shift-select')) {
                 item.shift = parseInt(target.value, 10);
@@ -426,7 +433,7 @@ export function initializeDetailsModalEvents() {
                 item.machine = machineName;
                 item.status = machineName ? 'Scheduled' : 'To Be Planned';
                 shouldUpdateAndRender = true;
-
+                
                 const row = target.closest('tr');
                 if (row) {
                     const shiftSelect = row.querySelector('.shift-select');
@@ -435,14 +442,14 @@ export function initializeDetailsModalEvents() {
                     }
                 }
             }
-
+            
             if (shouldUpdateAndRender) {
                 utils.showLoadingOverlay(domElements.loadingOverlay);
                 try {
                     await api.updateOrderOnBackend(parentOrder.id, parentOrder);
-                    renderAll();
-                    renderOrderDetails(parentOrder); // Her-render de modal
                     utils.showNotification('Planning bijgewerkt.', 'success', domElements.notificationContainer);
+                    renderAll();
+                    renderOrderDetails(parentOrder);
                 } catch (error) {
                     utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error', domElements.notificationContainer);
                 } finally {
@@ -451,13 +458,22 @@ export function initializeDetailsModalEvents() {
             }
         });
 
+
+        // --- START: De CLICK handler (Materiaal Status, Uitklappen) ---
+
         domElements.orderDetailsContent.addEventListener('click', async (e) => {
             const target = e.target;
+            
+            // FIX: Voorkom dat clicks op de checkbox de rij uitklappen
+            if (target.classList.contains('program-status-checkbox') || target.tagName === 'LABEL') {
+                 return; 
+            }
 
+            // Material Status cycler
             const statusCycler = target.closest('.material-status-cycler');
             if (statusCycler) {
                 e.preventDefault();
-                const context = utils.findItemContext(target); // Gebruik de global util
+                const context = utils.findItemContext(target);
                 if (!context) return;
                 const { item, order: parentOrder } = context;
                 
@@ -467,59 +483,28 @@ export function initializeDetailsModalEvents() {
                 const newStatus = MATERIAL_STATUS[nextIndex];
 
                 item.materialStatus = newStatus;
+                let saveSuccess = false; // <-- NIEUWE VLAG
 
                 utils.showLoadingOverlay(domElements.loadingOverlay);
                 try {
                     await api.updateOrderOnBackend(parentOrder.id, parentOrder);
-                    renderAll();
-                    renderOrderDetails(parentOrder); // Her-render de modal
-                    utils.showNotification('Materiaalstatus bijgewerkt.', 'success', domElements.notificationContainer);
+                    saveSuccess = true; // Zet de vlag ALLEEN bij succes
                 } catch (error) {
                     utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error', domElements.notificationContainer);
                 } finally {
                     utils.hideLoadingOverlay(domElements.loadingOverlay);
+                    
+                    // Update UI alleen als de save slaagde
+                    if (saveSuccess) {
+                        utils.showNotification('Materiaalstatus bijgewerkt.', 'success', domElements.notificationContainer);
+                        renderAll();
+                        renderOrderDetails(parentOrder);
+                    }
                 }
                 return;
             }
 
-            const actionDropdownToggle = target.closest('.toggle-action-dropdown');
-            if (actionDropdownToggle) {
-                e.preventDefault();
-                const menu = actionDropdownToggle.nextElementSibling;
-                if (!menu) return;
-                const isAlreadyVisible = !menu.classList.contains('hidden');
-                document.querySelectorAll('.action-menu').forEach(m => {
-                    if (m !== menu) m.classList.add('hidden');
-                });
-                if (isAlreadyVisible) {
-                    menu.classList.add('hidden');
-                    return;
-                }
-                menu.style.visibility = 'hidden';
-                menu.classList.remove('hidden');
-                const menuHeight = menu.offsetHeight;
-                menu.classList.add('hidden');
-                menu.style.visibility = '';
-                const container = domElements.orderDetailsContent;
-                const buttonRect = actionDropdownToggle.getBoundingClientRect();
-                const containerRect = container.getBoundingClientRect();
-                const buttonTopInContainer = buttonRect.top - containerRect.top;
-                const requiredHeight = buttonTopInContainer + actionDropdownToggle.offsetHeight + menuHeight;
-                const spaceAvailableAbove = buttonTopInContainer;
-                menu.classList.remove('bottom-full', 'mb-2', 'top-full');
-                if (requiredHeight > container.clientHeight && spaceAvailableAbove > menuHeight) {
-                    menu.classList.add('bottom-full', 'mb-2');
-                } else {
-                    menu.classList.add('top-full');
-                }
-                menu.classList.remove('hidden');
-                return;
-            }
-
-            if (!target.closest('.action-dropdown')) {
-                document.querySelectorAll('.action-menu').forEach(m => m.classList.add('hidden'));
-            }
-
+            // Stuktijd bewerken
             const editablePieceTime = target.closest('.editable-piece-time');
             if (editablePieceTime) {
                 e.stopPropagation();
@@ -550,16 +535,17 @@ export function initializeDetailsModalEvents() {
                         await api.updateOrderOnBackend(order.id, order);
                     }
                     renderAll();
-                    openOrderDetailsModal(order.id); // Heropen de modal
+                    openOrderDetailsModal(order.id);
                 };
                 input.addEventListener('blur', saveChange);
                 input.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') input.blur();
-                    if (e.key === 'Escape') openOrderDetailsModal(order.id); // Heropen/annuleer
+                    if (e.key === 'Escape') openOrderDetailsModal(order.id);
                 });
                 return;
             }
 
+            // De uitklap/dichtklap logica
             const headerRow = target.closest('.part-header-row');
             if (headerRow) {
                 const partId = headerRow.dataset.partId;
@@ -578,7 +564,8 @@ export function initializeDetailsModalEvents() {
                 return;
             }
 
-            const context = utils.findItemContext(target); // Gebruik de global util
+            // De delete/unplan logica
+            const context = utils.findItemContext(target);
             if (!context) return;
             const { item, part: parentPart, order: parentOrder } = context;
             let actionTaken = false;
@@ -610,7 +597,7 @@ export function initializeDetailsModalEvents() {
                         document.body.classList.remove('no-scroll');
                     } else {
                         await api.updateOrderOnBackend(parentOrder.id, parentOrder);
-                        openOrderDetailsModal(parentOrder.id); // Heropen de modal
+                        openOrderDetailsModal(parentOrder.id);
                     }
                     renderAll();
                 });
@@ -622,7 +609,7 @@ export function initializeDetailsModalEvents() {
                 try {
                     await api.updateOrderOnBackend(parentOrder.id, parentOrder);
                     renderAll();
-                    openOrderDetailsModal(parentOrder.id); // Heropen de modal
+                    openOrderDetailsModal(parentOrder.id);
                 } catch (error) {
                     utils.showNotification(`Fout bij opslaan: ${error.message}`, 'error', domElements.notificationContainer);
                 } finally {

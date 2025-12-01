@@ -433,6 +433,9 @@ export function initializeOrderModalEvents() {
             const batchesData = JSON.parse(partForm.dataset.batches);
 
             const materialStatus = partForm.querySelector('[data-field="materialInStock"]').checked ? 'Available' : 'Not Available';
+            
+            // CORRECTIE: Lees de checkbox-waarde direct uit het formulier
+            const isProgrammedValue = partForm.querySelector('[data-field="isProgrammed"]').checked; 
 
             const newPart = {
                 id: partId,
@@ -443,7 +446,7 @@ export function initializeOrderModalEvents() {
                 materialStatus: materialStatus,
                 needsPostProcessing: partForm.querySelector('[data-field="needsPostProcessing"]').checked,
                 postProcessingDays: parseInt(partForm.querySelector('[data-field="postProcessingDays"]').value) || 0,
-                isProgrammed: isProgrammed,
+                isProgrammed: isProgrammedValue, // Gebruik de correct uitgelezen waarde
                 batches: batchesData.map((batch, batchIndex) => {
                     return {
                         batchId: `${partId}-b${batchIndex + 1}`,
@@ -455,6 +458,7 @@ export function initializeOrderModalEvents() {
                         machine: null,
                         startDate: null,
                         shift: 8,
+                        isProgrammed: isProgrammedValue, // Zorg dat de batch de waarde erft
                     };
                 })
             };
