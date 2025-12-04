@@ -16,6 +16,7 @@ import { initializeOrderModalEvents } from './modals/orderModal.js';
 import { initializeLoadModalEvents } from './modals/loadModal.js';
 import { initializeDetailsModalEvents } from './modals/detailsModal.js';
 import { initializeShiftModalEvents } from './modals/shiftModal.js';
+import { cleanupTrashCan } from './planningGridEvents.js';
 import { openConfirmModal } from './modals/confirmModal.js'; // Importeer deze voor de import/export knoppen
 
 export function initializeEventListeners() {
@@ -219,7 +220,6 @@ export function initializeEventListeners() {
     });
 
     window.addEventListener('dragend', () => {
-        // De cleanupTrashCan() functie in planningGridEvents.js regelt nu alles
-        cleanupTrashCan(); 
+        cleanupTrashCan(); // Deze aanroep werkt nu dankzij de import
     });
 }

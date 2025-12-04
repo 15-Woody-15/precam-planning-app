@@ -213,21 +213,6 @@ function renderOrderDetails(order) {
             batchRows.forEach(row => row.classList.remove('hidden'));
             const arrow = headerRow.querySelector('.toggle-arrow');
             if (arrow) arrow.classList.add('rotate-180');
-
-            // --- OOK HIER DE DARK CLASS VERWIJDEREN ---
-            if (highlightedBatchId) {
-                const batchRow = domElements.orderDetailsContent.querySelector(`tr[data-batch-id="${highlightedBatchId}"]`);
-                if (batchRow) {
-                    setTimeout(() => {
-                        batchRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        batchRow.classList.add('bg-yellow-100', 'transition-all', 'duration-1000'); // dark:bg-yellow-800/30 VERWIJDERD
-                        setTimeout(() => {
-                            batchRow.classList.remove('bg-yellow-100'); // dark:bg-yellow-800/30 VERWIJDERD
-                        }, 2500);
-                    }, 100);
-                }
-            }
-            // --- EINDE ---
         }
     });
 }
@@ -502,6 +487,61 @@ export function initializeDetailsModalEvents() {
                     }
                 }
                 return;
+            }
+
+            // --- HIER WAS HET GAT: De Actie-Dropdown ---
+            const actionDropdownToggle = target.closest('.toggle-action-dropdown');
+            if (actionDropdownToggle) {
+                e.preventDefault();
+                e.stopPropagation(); // Essentieel om window-close te voorkomen
+
+                const menu = actionDropdownToggle.nextElementSibling;
+                if (!menu) return;
+
+                const isAlreadyVisible = !menu.classList.contains('hidden');
+
+                // 1. Sluit alle andere menu's
+                document.querySelectorAll('.action-menu').forEach(m => {
+                    if (m !== menu) m.classList.add('hidden');
+                });
+
+                if (isAlreadyVisible) {
+                    menu.classList.add('hidden');
+                    return;
+                }
+
+                // --- HET ORIGINELE, COMPLEXE POSITIONERINGSBLOK HERSTELD ---
+                // Deze logica zorgt ervoor dat de positie correct wordt berekend
+                menu.style.visibility = 'hidden';
+                menu.classList.remove('hidden');
+                const menuHeight = menu.offsetHeight;
+                menu.classList.add('hidden');
+                menu.style.visibility = '';
+
+                const container = domElements.orderDetailsContent;
+                const buttonRect = actionDropdownToggle.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                const buttonTopInContainer = buttonRect.top - containerRect.top;
+                const requiredHeight = buttonTopInContainer + actionDropdownToggle.offsetHeight + menuHeight;
+                const spaceAvailableAbove = buttonTopInContainer;
+
+                // Positioneringslogica (kijkt of er onderaan genoeg ruimte is)
+                menu.classList.remove('bottom-full', 'mb-2', 'top-full');
+                if (requiredHeight > container.clientHeight && spaceAvailableAbove > menuHeight) {
+                    menu.classList.add('bottom-full', 'mb-2');
+                } else {
+                    menu.classList.add('top-full');
+                }
+
+                menu.classList.remove('hidden');
+                return;
+            }
+            // --- EINDE GEREPAREERD BLOK ---
+
+            // Sluit het menu als er ergens anders op de modal wordt geklikt
+            if (!target.closest('.action-dropdown')) {
+                document.querySelectorAll('.action-menu').forEach(m => m.classList.add('hidden'));
             }
 
             // Stuktijd bewerken
